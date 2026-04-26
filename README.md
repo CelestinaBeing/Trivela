@@ -16,7 +16,7 @@ Use cases: loyalty points, drip campaigns, bounties, and any flow where you need
 
 ---
 
-## Project Structure.
+## Project-Structure.
 
 ```
 Trivela/
