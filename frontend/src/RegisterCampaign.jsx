@@ -6,6 +6,7 @@ import {
   getCampaignContractId,
   getStellarNetwork,
 } from './stellar';
+import TransactionStatus from './components/TransactionStatus';
 
 /**
  * RegisterCampaign — lets the connected wallet register as a campaign
@@ -114,16 +115,10 @@ export default function RegisterCampaign({ walletAddress }) {
       )}
 
       {txHash && (
-        <p className="register-success" role="status" aria-live="polite">
-          ✓ Registered successfully —{' '}
-          <a
-            href={`https://stellar.expert/explorer/${stellarNetwork}/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            view transaction
-          </a>
-        </p>
+        <TransactionStatus
+          hash={txHash}
+          network={stellarNetwork}
+        />
       )}
 
       {notice && <p className="register-note" role="status">{notice}</p>}

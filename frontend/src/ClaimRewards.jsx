@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { submitClaimTransaction, normalizeError, getStellarNetwork } from './stellar';
+import TransactionStatus from './components/TransactionStatus';
 
 /**
  * ClaimRewards — lets the user enter a points amount, sign a Soroban
@@ -86,16 +87,10 @@ export default function ClaimRewards({ walletAddress, onClaimSuccess }) {
       </form>
 
       {txHash && (
-        <p id={feedbackId} className="claim-success" role="status" aria-live="polite">
-          ✓ Claimed successfully —{' '}
-          <a
-            href={`https://stellar.expert/explorer/${stellarNetwork}/tx/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            view transaction
-          </a>
-        </p>
+        <TransactionStatus
+          hash={txHash}
+          network={stellarNetwork}
+        />
       )}
 
       {claimError && <p id={feedbackId} className="claim-error" role="alert">{claimError}</p>}
