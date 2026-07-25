@@ -18,6 +18,7 @@ export function createEventIndexer({ db, rpcPool, logger = console, referralBonu
     lagLedgers: 0,
     eventsTotal: 0,
     errorsTotal: 0,
+    gapsDetected: 0,
     lastPollAt: null,
   };
 
@@ -87,18 +88,37 @@ export function createEventIndexer({ db, rpcPool, logger = console, referralBonu
         await processEvent(event, contractId);
       }
 
-      if (nextCursor) {
-        updateCursor(
-          contractId,
-          nextCursor,
-          events.length > 0 ? events[events.length - 1].ledger : 0,
-        );
+      if (nextCursor && events.length > 0) {
+        const currentLedger = events[events.length - 1].ledger;
+        checkForGaps(contractId, currentLedger);
+        updateCursor(contractId, nextCursor, currentLedger);
       }
 
       metrics.lastPollAt = new Date().toISOString();
       return nextCursor;
     } finally {
       rpcPool.release(rpc);
+    }
+  }
+
+  function checkForGaps(contractId, currentLedger) {
+    const lastState = db
+      .prepare('SELECT last_ledger FROM indexer_state WHERE contract_id = ?')
+      .get(contractId);
+    const lastLedger = lastState?.last_ledger || 0;
+
+    if (currentLedger > lastLedger + 1) {
+      const gap = { contractId, fromLedger: lastLedger + 1, toLedger: currentLedger - 1 };
+      try {
+        db.prepare(
+          `INSERT INTO indexer_gaps (contract_id, from_ledger, to_ledger, detected_at, reconciled_at)
+           VALUES (?, ?, ?, datetime('now'), NULL)`
+        ).run(gap.contractId, gap.fromLedger, gap.toLedger);
+        metrics.gapsDetected++;
+        logger.warn?.(`indexer:gap detected contractId=${contractId} ledgers=${gap.fromLedger}-${gap.toLedger}`);
+      } catch (err) {
+        logger.error?.('checkForGaps:insert', err);
+      }
     }
   }
 
@@ -124,12 +144,17 @@ export function createEventIndexer({ db, rpcPool, logger = console, referralBonu
   }
 
   function getHealth() {
+    const unreconciledGaps = db
+      .prepare('SELECT COUNT(*) as count FROM indexer_gaps WHERE reconciled_at IS NULL')
+      .get();
     return {
       status: metrics.lastPollAt ? 'ok' : 'idle',
       lastLedger: metrics.lastLedger,
       lagLedgers: metrics.lagLedgers,
       eventsTotal: metrics.eventsTotal,
       errorsTotal: metrics.errorsTotal,
+      gapsDetected: metrics.gapsDetected,
+      unreconciledGaps: unreconciledGaps?.count || 0,
       lastPollAt: metrics.lastPollAt,
     };
   }
@@ -140,6 +165,7 @@ export function createEventIndexer({ db, rpcPool, logger = console, referralBonu
       indexer_lag_ledgers: metrics.lagLedgers,
       indexer_events_total: metrics.eventsTotal,
       indexer_errors_total: metrics.errorsTotal,
+      indexer_gaps_detected: metrics.gapsDetected,
     };
   }
 
