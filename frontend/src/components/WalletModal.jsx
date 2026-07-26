@@ -1,46 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../lib/i18n';
 
-const WALLETS = [
-  {
-    name: 'Freighter',
-    description: 'The official Stellar browser extension wallet',
-    icon: '✦',
-    installUrl: 'https://www.freighter.app',
-    detected: () => !!window.freighterApi,
-    comingSoon: false,
-  },
-  {
-    name: 'xBull',
-    description: 'Feature-rich Stellar wallet with DeFi support',
-    icon: '⊕',
-    installUrl: 'https://xbull.app',
-    detected: () => !!window.xBullSDK,
-    comingSoon: false,
-  },
-  {
-    name: 'Lobstr',
-    description: 'Popular mobile & desktop Stellar wallet',
-    icon: '◎',
-    installUrl: 'https://lobstr.co/download',
-    detected: () => !!(window.lobstr ?? window.lobstrApi),
-    comingSoon: false,
-  },
-  {
-    name: 'WalletConnect',
-    description: 'Connect any compatible mobile wallet via QR code',
-    icon: '⬡',
-    installUrl: 'https://walletconnect.com/explorer',
-    detected: () => !!window.__walletConnectClient,
-    comingSoon: false,
-  },
-  {
-    name: 'Rabet',
-    description: 'Lightweight Stellar browser extension',
-    icon: '◈',
-    installUrl: 'https://rabet.io',
-    detected: () => !!window.rabet,
-    comingSoon: false,
-  },
+const WALLET_DEFS = [
+  { name: 'Freighter', descKey: 'wallet.freighter.desc', icon: '✦', installUrl: 'https://www.freighter.app', detected: () => !!window.freighterApi, comingSoon: false },
+  { name: 'xBull',     descKey: 'wallet.xbull.desc',     icon: '⊕', installUrl: 'https://xbull.app',          detected: () => !!window.xBullSDK,                       comingSoon: false },
+  { name: 'Lobstr',   descKey: 'wallet.lobstr.desc',    icon: '◎', installUrl: 'https://lobstr.co/download', detected: () => !!(window.lobstr ?? window.lobstrApi),    comingSoon: false },
+  { name: 'WalletConnect', descKey: 'wallet.walletconnect.desc', icon: '⬡', installUrl: 'https://walletconnect.com/explorer', detected: () => !!window.__walletConnectClient, comingSoon: false },
+  { name: 'Rabet',    descKey: 'wallet.rabet.desc',     icon: '◈', installUrl: 'https://rabet.io',           detected: () => !!window.rabet,                           comingSoon: false },
 ];
 
 const OVERLAY_STYLE = {
@@ -74,6 +40,7 @@ const ERROR_STYLE = {
 };
 
 function WalletOption({ wallet, isDetected, isLoading, onConnect }) {
+  const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
   const disabled = isLoading || wallet.comingSoon;
 
@@ -127,17 +94,17 @@ function WalletOption({ wallet, isDetected, isLoading, onConnect }) {
             margin: '2px 0 0',
           }}
         >
-          {wallet.comingSoon ? 'WalletConnect integration coming soon' : wallet.description}
+          {wallet.comingSoon ? t('wallet.modal.comingSoon') : wallet.description}
         </p>
       </div>
       <span style={badgeStyle}>
         {isDetected
           ? isLoading
-            ? 'Connecting…'
-            : 'Detected'
+            ? t('wallet.connecting')
+            : t('wallet.modal.detected')
           : wallet.comingSoon
-            ? 'Soon'
-            : 'Install →'}
+            ? t('wallet.modal.soon')
+            : t('wallet.modal.install')}
       </span>
     </>
   );
@@ -176,6 +143,8 @@ function WalletOption({ wallet, isDetected, isLoading, onConnect }) {
 }
 
 export default function WalletModal({ isOpen, onClose, onConnect, isLoading, error }) {
+  const { t } = useI18n();
+  const WALLETS = WALLET_DEFS.map((w) => ({ ...w, description: t(w.descKey) }));
   const [detected, setDetected] = useState({});
 
   useEffect(() => {
@@ -206,7 +175,7 @@ export default function WalletModal({ isOpen, onClose, onConnect, isLoading, err
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Choose wallet"
+      aria-label={t('wallet.modal.title')}
     >
       <div style={DIALOG_STYLE} onClick={(e) => e.stopPropagation()}>
         <div
@@ -225,7 +194,7 @@ export default function WalletModal({ isOpen, onClose, onConnect, isLoading, err
               color: 'var(--color-text, #e2e8f0)',
             }}
           >
-            Connect wallet
+            {t('wallet.modal.title')}
           </h2>
           <button
             type="button"

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../lib/apiClient';
+import { useI18n } from '../lib/i18n';
 
 const ACTION_OPTIONS = [
   '',
@@ -30,6 +31,7 @@ function formatDate(str) {
 }
 
 export default function AuditLog() {
+  const { t } = useI18n();
   const [entries, setEntries] = useState([]);
   const [cursors, setCursors] = useState([null]);
   const [page, setPage] = useState(0);
@@ -66,7 +68,7 @@ export default function AuditLog() {
           return next;
         });
       } catch {
-        setError('Could not load audit log.');
+        setError(t('audit.error'));
         setEntries([]);
       } finally {
         setLoading(false);
@@ -114,10 +116,10 @@ export default function AuditLog() {
             id="audit-log-heading"
             style={{ margin: '0 0 4px', fontSize: '1.15rem', fontWeight: 700 }}
           >
-            Org Activity Feed
+            {t('audit.title')}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            All privileged actions taken by org members.
+            {t('audit.subtitle')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -127,7 +129,7 @@ export default function AuditLog() {
             className="btn btn-secondary"
             style={{ fontSize: '0.8rem', padding: '6px 14px', textDecoration: 'none' }}
           >
-            Export CSV
+            {t('audit.export.csv')}
           </a>
           <a
             href={apiClient.exportAuditLog(filters, 'json')}
@@ -135,7 +137,7 @@ export default function AuditLog() {
             className="btn btn-secondary"
             style={{ fontSize: '0.8rem', padding: '6px 14px', textDecoration: 'none' }}
           >
-            Export JSON
+            {t('audit.export.json')}
           </a>
         </div>
       </div>
@@ -163,7 +165,7 @@ export default function AuditLog() {
             type="text"
             value={pendingFilters.actor}
             onChange={(e) => setPendingFilters((p) => ({ ...p, actor: e.target.value }))}
-            placeholder="Wallet or user ID"
+            placeholder={t('audit.filter.actorPlaceholder')}
             style={inputStyle}
           />
         </div>
@@ -179,7 +181,7 @@ export default function AuditLog() {
           >
             {ACTION_OPTIONS.map((a) => (
               <option key={a} value={a}>
-                {a || 'All actions'}
+                {a || t('audit.filter.allActions')}
               </option>
             ))}
           </select>
@@ -193,7 +195,7 @@ export default function AuditLog() {
             type="text"
             value={pendingFilters.resource}
             onChange={(e) => setPendingFilters((p) => ({ ...p, resource: e.target.value }))}
-            placeholder="campaign/member/key…"
+            placeholder={t('audit.filter.resourcePlaceholder')}
             style={inputStyle}
           />
         </div>
@@ -249,14 +251,14 @@ export default function AuditLog() {
             className="btn btn-primary"
             onClick={() => load(cursors[page] ?? null, filters)}
           >
-            Retry
+            {t('common.retry')}
           </button>
         </div>
       )}
 
       {loading ? (
         <p role="status" style={{ color: 'var(--text-muted)' }}>
-          Loading audit log…
+          {t('audit.loading')}
         </p>
       ) : (
         <>
@@ -267,7 +269,7 @@ export default function AuditLog() {
             >
               <thead>
                 <tr style={{ background: 'var(--bg-elevated)' }}>
-                  {['Timestamp', 'Actor', 'Action', 'Resource', 'Details'].map((h) => (
+                  {[t('audit.col.timestamp'), t('audit.col.actor'), t('audit.col.action'), t('audit.col.resource'), t('audit.col.details')].map((h) => (
                     <th
                       key={h}
                       scope="col"
@@ -296,7 +298,7 @@ export default function AuditLog() {
                         color: 'var(--text-muted)',
                       }}
                     >
-                      No audit entries match your filters.
+                      {t('audit.empty')}
                     </td>
                   </tr>
                 ) : (
@@ -360,7 +362,7 @@ export default function AuditLog() {
               onClick={() => setPage((p) => p - 1)}
               style={{ fontSize: '0.8rem', padding: '5px 14px' }}
             >
-              Previous
+              {t('common.previous')}
             </button>
             <button
               type="button"
@@ -369,7 +371,7 @@ export default function AuditLog() {
               onClick={() => setPage((p) => p + 1)}
               style={{ fontSize: '0.8rem', padding: '5px 14px' }}
             >
-              Next
+              {t('common.next')}
             </button>
           </div>
         </>
