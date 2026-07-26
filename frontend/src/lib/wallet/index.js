@@ -5,6 +5,8 @@ import { RabetProvider } from './RabetProvider.js';
 import { LobstrProvider } from './LobstrProvider.js';
 import { WalletConnectProvider } from './WalletConnectProvider.js';
 import { PasskeyProvider } from './PasskeyProvider.js';
+import { HanaProvider } from './HanaProvider.js';
+import { LedgerProvider } from './LedgerProvider.js';
 
 const walletManager = new WalletManager();
 
@@ -14,6 +16,8 @@ walletManager.registerProvider(new RabetProvider());
 walletManager.registerProvider(new LobstrProvider());
 walletManager.registerProvider(new WalletConnectProvider());
 walletManager.registerProvider(new PasskeyProvider());
+walletManager.registerProvider(new HanaProvider());
+walletManager.registerProvider(new LedgerProvider());
 
 export {
   walletManager,
@@ -24,5 +28,7 @@ export {
   LobstrProvider,
   WalletConnectProvider,
   PasskeyProvider,
+  HanaProvider,
+  LedgerProvider,
 };
 export { WalletProvider } from './WalletProvider.js';
