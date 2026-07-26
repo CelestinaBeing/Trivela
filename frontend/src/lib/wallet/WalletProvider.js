@@ -32,4 +32,8 @@ export class WalletProvider {
   getName() {
     throw new Error('getName() must be implemented');
   }
+
+  async getNetwork() {
+    return null;
+  }
 }

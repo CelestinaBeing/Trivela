@@ -124,4 +124,11 @@ export class WalletManager {
   getActiveProviderName() {
     return this.activeProvider ? this.activeProvider.getName() : null;
   }
+
+  async getNetwork() {
+    if (!this.activeProvider) {
+      return null;
+    }
+    return this.activeProvider.getNetwork();
+  }
 }

@@ -4,6 +4,9 @@ import DevNetworkSwitcher from './DevNetworkSwitcher';
 import NotificationCenter from './NotificationCenter';
 import FaucetModal from './FaucetModal';
 import { apiUrl } from '../config';
+import { useI18n, SUPPORTED_LOCALES } from '../lib/i18n';
+
+const LOCALE_LABELS = { en: 'EN', 'zh-CN': '中文' };
 
 function truncateWalletAddress(walletAddress) {
   if (!walletAddress) return '';
@@ -11,15 +14,15 @@ function truncateWalletAddress(walletAddress) {
   return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 }
 
-const NAV_LINKS = [
-  { href: '/analytics', label: 'Analytics' },
-  { href: '/notification-settings', label: 'Notifications' },
-  { href: 'https://github.com/FinesseStudioLab/Trivela', label: 'GitHub' },
-  { href: 'https://developers.stellar.org/docs', label: 'Stellar' },
-  { href: '/', label: 'Campaigns' },
-  { href: '/explore', label: 'Explore' },
-  { href: '/about', label: 'About' },
-  { href: '/admin', label: 'Admin' },
+const NAV_LINK_DEFS = [
+  { href: '/analytics', key: 'nav.analytics' },
+  { href: '/notification-settings', key: 'nav.notifications' },
+  { href: 'https://github.com/FinesseStudioLab/Trivela', key: 'nav.github' },
+  { href: 'https://developers.stellar.org/docs', key: 'nav.stellar' },
+  { href: '/', key: 'nav.campaigns' },
+  { href: '/explore', key: 'nav.explore' },
+  { href: '/about', key: 'nav.about' },
+  { href: '/admin', key: 'nav.admin' },
 ];
 
 export default function Header({
@@ -35,7 +38,9 @@ export default function Header({
   onDisconnectWallet,
 }) {
   const nextTheme = theme === 'dark' ? 'light' : 'dark';
-  const balanceLabel = `${stellarNetwork === 'mainnet' ? 'Mainnet' : 'Testnet'} balance`;
+  const { t, locale, setLocale } = useI18n();
+  const balanceLabel = `${stellarNetwork === 'mainnet' ? t('network.mainnet') : t('network.testnet')} balance`;
+  const NAV_LINKS = NAV_LINK_DEFS.map((l) => ({ ...l, label: t(l.key) }));
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [showFaucet, setShowFaucet] = useState(false);
@@ -364,15 +369,15 @@ export default function Header({
                   className="btn btn-primary btn-button wallet-toggle"
                   onClick={walletAddress ? onDisconnectWallet : onConnectWallet}
                   disabled={isWalletLoading}
-                  aria-label={walletAddress ? 'Disconnect wallet' : 'Connect wallet'}
+                  aria-label={walletAddress ? t('wallet.disconnect') : t('wallet.connect')}
                 >
                   {isWalletLoading
-                    ? 'Connecting…'
+                    ? t('wallet.connecting')
                     : walletAddress
-                      ? 'Disconnect'
+                      ? t('wallet.disconnect')
                       : statusColor === 'red'
-                        ? 'Connect wallet (Network degraded)'
-                        : 'Connect wallet'}
+                        ? `${t('wallet.connect')} (Network degraded)`
+                        : t('wallet.connect')}
                 </button>
               )}
 
@@ -383,12 +388,31 @@ export default function Header({
                 aria-label={`Switch to ${nextTheme} theme`}
               >
                 <span className="theme-toggle-label">
-                  {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                  {theme === 'dark' ? t('common.lightMode') : t('common.darkMode')}
                 </span>
                 <span className="theme-toggle-state" aria-hidden="true">
                   {theme}
                 </span>
               </button>
+
+              <select
+                value={locale}
+                onChange={(e) => setLocale(e.target.value)}
+                aria-label={t('common.language')}
+                style={{
+                  background: 'var(--color-surface, #1e293b)',
+                  border: '1px solid var(--color-border, rgba(255,255,255,0.1))',
+                  borderRadius: '6px',
+                  color: 'var(--color-text, #e2e8f0)',
+                  fontSize: '0.8rem',
+                  padding: '4px 8px',
+                  cursor: 'pointer',
+                }}
+              >
+                {SUPPORTED_LOCALES.map((l) => (
+                  <option key={l} value={l}>{LOCALE_LABELS[l] ?? l}</option>
+                ))}
+              </select>
             </div>
           </div>
         </nav>

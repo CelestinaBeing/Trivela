@@ -5,6 +5,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
 import PwaStatus from './components/PwaStatus';
+import { I18nProvider } from './lib/i18n';
 import './index.css';
 
 function RoutedApp() {
@@ -21,9 +22,11 @@ function RoutedApp() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider>
-      <BrowserRouter>
-        <RoutedApp />
-      </BrowserRouter>
+      <I18nProvider>
+        <BrowserRouter>
+          <RoutedApp />
+        </BrowserRouter>
+      </I18nProvider>
     </HelmetProvider>
   </React.StrictMode>,
 );
