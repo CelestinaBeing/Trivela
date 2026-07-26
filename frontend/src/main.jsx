@@ -5,6 +5,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
 import PwaStatus from './components/PwaStatus';
+import './i18n/index.js';
 import './index.css';
 
 function RoutedApp() {
