@@ -60,6 +60,7 @@ import { createVariantRoutes } from './routes/variants.js';
 import { createVariantService } from './services/variantService.js';
 import { createCohortRoutes } from './routes/cohorts.js';
 import { createCohortService } from './services/cohortService.js';
+import { createNotificationPreferenceRoutes } from './routes/notificationPreferences.js';
 import { createPushRoutes } from './routes/push.js';
 import { createOrgRoutes } from './routes/orgs.js';
 import { createAuditRouter } from './routes/audit.js';
@@ -340,6 +341,7 @@ export async function createApp(options = {}) {
   const apiKeyRepository = dal.apiKeys;
   const failedJobRepository = options.failedJobRepository ?? dal.failedJobs;
   const allowlistRepository = dal.allowlists;
+  const notificationPreferencesRepository = dal.notificationPreferences;
   const orgMemberRepository = dal.orgMembers;
   const usageRepository = options.usageRepository ?? dal.usage;
   const idempotencyRepository = dal.idempotency;
@@ -2608,6 +2610,13 @@ export async function createApp(options = {}) {
       cohortService,
       campaignRepo: campaignRepository,
     });
+    app.use(prefix, rateLimiter, requireApiKey, cohortRouter);
+
+    // Notification preferences + unsubscribe compliance (Issue #1026)
+    const notifRouter = createNotificationPreferenceRoutes({
+      notifRepo: notificationPreferencesRepository,
+    });
+    app.use(prefix, rateLimiter, notifRouter);
     app.use(prefix, rateLimiter, ...guard, cohortRouter);
 
     // Web Push subscription routes (Issue #619)

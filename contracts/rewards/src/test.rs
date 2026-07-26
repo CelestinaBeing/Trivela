@@ -1382,6 +1382,10 @@ fn test_paused_blocks_referral_bonus() {
         Err(Ok(Error::ContractPaused))
     );
 }
+
+// ── Issue #1020: zero-amount and self-transfer guards ─────────────────────────
+
+fn setup_rewards() -> (Env, RewardsContractClient<'static>, Address) {
 // ── nonce pruning (#451) ───────────────────────────────────────────────────
 
 #[test]
@@ -1401,6 +1405,144 @@ fn test_prune_used_nonces_removes_stale_entries() {
     let contract_id = env.register_contract(None, RewardsContract);
     let client = RewardsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
+    client.initialize(&admin, &symbol_short!("TEST"), &symbol_short!("TST"));
+    (env, client, admin)
+}
+
+#[test]
+fn test_credit_zero_amount_rejected() {
+    let (env, client, _admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    assert_eq!(
+        client.try_credit(&creditor, &user, &0),
+        Err(Ok(Error::ZeroAmount)),
+        "credit with amount=0 must return ZeroAmount"
+    );
+}
+
+#[test]
+fn test_claim_zero_amount_rejected() {
+    let (env, client, _admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    client.credit(&creditor, &user, &1_000);
+    assert_eq!(
+        client.try_claim(&user, &0),
+        Err(Ok(Error::ZeroAmount)),
+        "claim with amount=0 must return ZeroAmount"
+    );
+}
+
+#[test]
+fn test_admin_transfer_zero_amount_rejected() {
+    let (env, client, admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+    env.mock_all_auths();
+    client.credit(&creditor, &from, &500);
+    assert_eq!(
+        client.try_admin_transfer(&admin, &from, &to, &0),
+        Err(Ok(Error::ZeroAmount)),
+        "admin_transfer with amount=0 must return ZeroAmount"
+    );
+}
+
+#[test]
+fn test_admin_transfer_self_transfer_rejected() {
+    let (env, client, admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    client.credit(&creditor, &user, &500);
+    assert_eq!(
+        client.try_admin_transfer(&admin, &user, &user, &100),
+        Err(Ok(Error::SelfTransfer)),
+        "admin_transfer with from==to must return SelfTransfer"
+    );
+}
+
+#[test]
+fn test_credit_vested_zero_amount_rejected() {
+    let (env, client, _admin) = setup_rewards();
+    let from = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    env.ledger().set_sequence_number(100);
+    assert_eq!(
+        client.try_credit_vested(&from, &user, &0, &100, &200),
+        Err(Ok(Error::ZeroAmount)),
+        "credit_vested with total_amount=0 must return ZeroAmount"
+    );
+}
+
+// ── Issue #1021: total_supply conservation ────────────────────────────────────
+
+#[test]
+fn test_total_supply_increments_on_credit() {
+    let (env, client, _admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    assert_eq!(client.total_supply(), 0);
+    client.credit(&creditor, &user, &1_000);
+    assert_eq!(client.total_supply(), 1_000);
+    client.credit(&creditor, &user, &500);
+    assert_eq!(client.total_supply(), 1_500);
+}
+
+#[test]
+fn test_total_supply_decrements_on_claim() {
+    let (env, client, _admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let user = Address::generate(&env);
+    env.mock_all_auths();
+    client.credit(&creditor, &user, &2_000);
+    assert_eq!(client.total_supply(), 2_000);
+    client.claim(&user, &300);
+    assert_eq!(client.total_supply(), 1_700, "claim must reduce total_supply");
+}
+
+#[test]
+fn test_total_supply_conservation_across_multi_user_ops() {
+    let (env, client, _admin) = setup_rewards();
+    let creditor = Address::generate(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    env.mock_all_auths();
+
+    client.credit(&creditor, &alice, &3_000);
+    client.credit(&creditor, &bob, &1_000);
+    assert_eq!(client.total_supply(), 4_000);
+
+    client.claim(&alice, &500);
+    client.claim(&bob, &200);
+    assert_eq!(client.total_supply(), 3_300);
+
+    // admin_transfer must NOT change total supply
+    client.admin_transfer(
+        &Address::generate(&env),
+        &alice,
+        &bob,
+        &100,
+    );
+    assert_eq!(
+        client.total_supply(),
+        3_300,
+        "admin_transfer must be supply-neutral"
+    );
+
+    // sum of individual balances must equal total_supply
+    let alice_bal = client.balance(&alice);
+    let bob_bal = client.balance(&bob);
+    assert_eq!(
+        alice_bal + bob_bal,
+        client.total_supply(),
+        "sum of balances must equal total_supply"
+    );
     client.initialize(&admin, &symbol_short!("Trivela"), &symbol_short!("TVL"));
     env.mock_all_auths();
 
