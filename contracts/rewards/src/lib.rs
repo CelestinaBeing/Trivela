@@ -56,6 +56,10 @@ pub enum Error {
     InvalidReferralConfig = 19,
     /// The computed referral bonus rounded down to zero.
     ZeroReferralBonus = 20,
+    /// Operation amount must be greater than zero (issue #1020).
+    ZeroAmount = 21,
+    /// Transfer source and destination cannot be the same address (issue #1020).
+    SelfTransfer = 22,
 }
 
 /// Vesting schedule record stored per user per vest_id.
@@ -101,6 +105,10 @@ pub const TTL_EXTEND_TO: u32 = 100;
 
 const ADMIN: Symbol = symbol_short!("admin");
 const BALANCE: Symbol = symbol_short!("balance");
+// Total outstanding points in circulation — incremented by credit, decremented
+// by claim and redeem. Conservation invariant: total_supply = Σ user balances
+// (issue #1021).
+const TOTAL_SUPPLY: Symbol = symbol_short!("tsupply");
 const CLAIMED: Symbol = symbol_short!("claimed");
 const METADATA: Symbol = symbol_short!("metadata");
 const PAUSED: Symbol = symbol_short!("paused");
@@ -352,6 +360,9 @@ impl RewardsContract {
 
     /// Credit points to a user.
     pub fn credit(env: Env, from: Address, user: Address, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         from.require_auth();
         ensure_not_paused(&env)?;
         check_and_increment_rate(&env, &from, 1)?;
@@ -369,6 +380,12 @@ impl RewardsContract {
         let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
         let new_balance = current.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage().instance().set(&key, &new_balance);
+
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.checked_add(amount).ok_or(Error::Overflow)?);
+
         env.events().publish((CREDIT_EVENT, user), amount);
         env.storage()
             .instance()
@@ -418,6 +435,9 @@ impl RewardsContract {
         let mut staged = Vec::new(&env);
 
         for (user, amount) in recipients.iter() {
+            if amount == 0 {
+                return Err(Error::ZeroAmount);
+            }
             let key = (BALANCE, user.clone());
             let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
             let new_balance = current.checked_add(amount).ok_or(Error::Overflow)?;
@@ -442,6 +462,9 @@ impl RewardsContract {
 
     /// Claim rewards for a user (reduces balance).
     pub fn claim(env: Env, user: Address, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         user.require_auth();
         ensure_not_paused(&env)?;
 
@@ -456,6 +479,11 @@ impl RewardsContract {
         env.storage()
             .instance()
             .set(&CLAIMED, &total.saturating_add(amount));
+
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.saturating_sub(amount));
 
         env.events().publish((CLAIM_EVENT, user), amount);
         env.storage()
@@ -477,6 +505,12 @@ impl RewardsContract {
         to: Address,
         amount: u64,
     ) -> Result<(), Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
+        if from == to {
+            return Err(Error::SelfTransfer);
+        }
         require_admin(&env, &admin)?;
 
         let from_key = (BALANCE, from.clone());
@@ -752,6 +786,9 @@ impl RewardsContract {
         start_ledger: u32,
         end_ledger: u32,
     ) -> Result<u64, Error> {
+        if total_amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         from.require_auth();
         ensure_not_paused(&env)?;
 
@@ -812,6 +849,9 @@ impl RewardsContract {
     /// Claim up to `amount` from the unlocked portion of a specific vesting schedule.
     /// Returns the remaining claimable amount in that vest schedule after this claim.
     pub fn claim_vested(env: Env, user: Address, vest_id: u64, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         user.require_auth();
         ensure_not_paused(&env)?;
 
@@ -904,7 +944,14 @@ impl RewardsContract {
 
     /// Redeem points for asset tokens.
     /// Burns points_amount from user balance, transfers asset tokens to user.
+    pub fn total_supply(env: Env) -> u64 {
+        env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0)
+    }
+
     pub fn redeem(env: Env, user: Address, points_amount: u64) -> Result<(), Error> {
+        if points_amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         user.require_auth();
         ensure_not_paused(&env)?;
 
@@ -949,6 +996,12 @@ impl RewardsContract {
             .checked_sub(points_amount)
             .ok_or(Error::InsufficientBalance)?;
         env.storage().instance().set(&balance_key, &new_balance);
+
+        // Deduct from total supply (conservation invariant, issue #1021)
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.saturating_sub(points_amount));
 
         // Update reserve
         let new_reserve = current_reserve.saturating_sub(asset_amount as u64);

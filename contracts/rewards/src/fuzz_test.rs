@@ -475,3 +475,139 @@ proptest! {
         }
     }
 }
+
+// ── Issue #1022: Differential fuzz test vs. reference model ──────────────────
+//
+// A simple Rust struct mirrors the contract's per-user balance semantics.
+// Randomised op sequences are applied to both; any divergence fails the test.
+// The reference model is intentionally minimal — it is the specification, not
+// a reimplementation of the contract's logic.
+
+/// Pure-Rust reference model for a single user's balance.
+struct BalanceModel {
+    balance: u64,
+    total_supply: u64,
+}
+
+impl BalanceModel {
+    fn new() -> Self {
+        Self { balance: 0, total_supply: 0 }
+    }
+
+    /// Returns new balance or None on ZeroAmount / overflow.
+    fn credit(&mut self, amount: u64) -> Option<u64> {
+        if amount == 0 {
+            return None;
+        }
+        let new_balance = self.balance.checked_add(amount)?;
+        let new_supply = self.total_supply.checked_add(amount)?;
+        self.balance = new_balance;
+        self.total_supply = new_supply;
+        Some(new_balance)
+    }
+
+    /// Returns new balance or None on ZeroAmount / insufficient balance.
+    fn claim(&mut self, amount: u64) -> Option<u64> {
+        if amount == 0 {
+            return None;
+        }
+        let new_balance = self.balance.checked_sub(amount)?;
+        self.balance = new_balance;
+        self.total_supply = self.total_supply.saturating_sub(amount);
+        Some(new_balance)
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(200))]
+
+    /// **Differential invariant**: for every randomised credit/claim sequence the
+    /// contract and the reference model must agree on the user's balance and on
+    /// whether each operation succeeds or fails (issue #1022).
+    #[test]
+    fn fuzz_differential_vs_reference_model(
+        ops in proptest::collection::vec(
+            prop_oneof![
+                3 => (1u64..=100_000u64).prop_map(|a| ('c', a)),  // credit
+                2 => (1u64..=50_000u64).prop_map(|a| ('k', a)),   // claim
+                1 => Just(('c', 0u64)),                             // zero-amount credit (must fail)
+                1 => Just(('k', 0u64)),                             // zero-amount claim  (must fail)
+            ],
+            1..=50,
+        )
+    ) {
+        let (env, _contract_id, client) = setup_fuzz();
+        let admin = Address::generate(&env);
+        let creditor = Address::generate(&env);
+        let user = Address::generate(&env);
+        env.mock_all_auths();
+        client.initialize(&admin, &symbol_short!("REF"), &symbol_short!("REF"));
+
+        let mut model = BalanceModel::new();
+
+        for (op, amount) in ops {
+            match op {
+                'c' => {
+                    let model_result = model.credit(amount);
+                    let contract_result = client.try_credit(&creditor, &user, &amount);
+
+                    match (model_result, contract_result) {
+                        (Some(model_bal), Ok(contract_bal)) => {
+                            assert_eq!(
+                                model_bal, contract_bal,
+                                "credit({amount}): model balance {model_bal} != contract balance {contract_bal}"
+                            );
+                            assert_eq!(
+                                model.total_supply,
+                                client.total_supply(),
+                                "credit({amount}): total_supply diverged"
+                            );
+                        }
+                        (None, Err(_)) => { /* both rejected — consistent */ }
+                        (Some(mb), Err(e)) => panic!(
+                            "credit({amount}): model accepted → {mb}, contract rejected → {e:?}"
+                        ),
+                        (None, Ok(cb)) => panic!(
+                            "credit({amount}): model rejected, contract accepted → {cb}"
+                        ),
+                    }
+                }
+                'k' => {
+                    let model_result = model.claim(amount);
+                    let contract_result = client.try_claim(&user, &amount);
+
+                    match (model_result, contract_result) {
+                        (Some(model_bal), Ok(contract_bal)) => {
+                            assert_eq!(
+                                model_bal, contract_bal,
+                                "claim({amount}): model balance {model_bal} != contract balance {contract_bal}"
+                            );
+                            assert_eq!(
+                                model.total_supply,
+                                client.total_supply(),
+                                "claim({amount}): total_supply diverged"
+                            );
+                        }
+                        (None, Err(_)) => { /* both rejected — consistent */ }
+                        (Some(mb), Err(e)) => panic!(
+                            "claim({amount}): model accepted → {mb}, contract rejected → {e:?}"
+                        ),
+                        (None, Ok(cb)) => panic!(
+                            "claim({amount}): model rejected, contract accepted → {cb}"
+                        ),
+                    }
+                }
+                _ => unreachable!(),
+            }
+
+            // After every op: contract balance must match reference model.
+            assert_eq!(
+                client.balance(&user),
+                model.balance,
+                "post-op balance diverged: contract={} model={}",
+                client.balance(&user),
+                model.balance
+            );
+        }
+    }
+}
