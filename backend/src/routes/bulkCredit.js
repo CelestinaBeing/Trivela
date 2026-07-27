@@ -38,9 +38,7 @@ export function createBulkCreditRouter({ jobQueue, jobStore, requireApiKey, log 
   router.post('/bulk-credit/upload', ...auth, csvUpload.single('file'), (req, res) => {
     // multer decorates the request at runtime; Express's own type has no
     // `file`, and @types/multer is not a dependency — describe what is used.
-    const upload = /** @type {{ buffer: Buffer } | undefined} */ (
-      /** @type {any} */ (req).file
-    );
+    const upload = /** @type {{ buffer: Buffer } | undefined} */ (/** @type {any} */ (req).file);
 
     if (!upload && !req.body?.csv) {
       return res.status(400).json({ error: 'No CSV data provided', code: 'MISSING_CSV' });

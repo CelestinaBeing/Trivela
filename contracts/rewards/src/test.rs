@@ -227,14 +227,18 @@ fn test_batch_credit_is_atomic_on_overflow() {
     client.initialize(&admin, &symbol_short!("Trivela"), &symbol_short!("TVL"));
 
     env.mock_all_auths();
-    client.credit(&admin, &user_a, &10);
+    // Only user_b is funded: crediting user_a as well would push total_supply
+    // past u64::MAX during setup (conservation invariant, issue #1021) instead
+    // of overflowing user_b's balance in the batch under test.
     client.credit(&admin, &user_b, &u64::MAX);
 
+    // user_a's +15 is staged first, then user_b's +1 overflows — nothing at all
+    // may be written.
     let recipients = vec![&env, (user_a.clone(), 15u64), (user_b.clone(), 1u64)];
     let result = client.try_batch_credit(&admin, &recipients);
 
     assert!(result.is_err());
-    assert_eq!(client.balance(&user_a), 10);
+    assert_eq!(client.balance(&user_a), 0);
     assert_eq!(client.balance(&user_b), u64::MAX);
 }
 
@@ -1385,7 +1389,6 @@ fn test_paused_blocks_referral_bonus() {
 
 // ── Issue #1020: zero-amount and self-transfer guards ─────────────────────────
 
-fn setup_rewards() -> (Env, RewardsContractClient<'static>, Address) {
 // ── nonce pruning (#451) ───────────────────────────────────────────────────
 
 #[test]
@@ -1400,13 +1403,14 @@ fn test_prune_used_nonces_empty_is_noop() {
 }
 
 #[test]
-fn test_prune_used_nonces_removes_stale_entries() {
+fn test_prune_used_nonces_zero_max_is_noop() {
     let env = Env::default();
     let contract_id = env.register_contract(None, RewardsContract);
     let client = RewardsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.initialize(&admin, &symbol_short!("TEST"), &symbol_short!("TST"));
-    (env, client, admin)
+
+    assert_eq!(client.prune_used_nonces(&0), 0);
 }
 
 #[test]
@@ -1503,12 +1507,16 @@ fn test_total_supply_decrements_on_claim() {
     client.credit(&creditor, &user, &2_000);
     assert_eq!(client.total_supply(), 2_000);
     client.claim(&user, &300);
-    assert_eq!(client.total_supply(), 1_700, "claim must reduce total_supply");
+    assert_eq!(
+        client.total_supply(),
+        1_700,
+        "claim must reduce total_supply"
+    );
 }
 
 #[test]
 fn test_total_supply_conservation_across_multi_user_ops() {
-    let (env, client, _admin) = setup_rewards();
+    let (env, client, admin) = setup_rewards();
     let creditor = Address::generate(&env);
     let alice = Address::generate(&env);
     let bob = Address::generate(&env);
@@ -1522,13 +1530,9 @@ fn test_total_supply_conservation_across_multi_user_ops() {
     client.claim(&bob, &200);
     assert_eq!(client.total_supply(), 3_300);
 
-    // admin_transfer must NOT change total supply
-    client.admin_transfer(
-        &Address::generate(&env),
-        &alice,
-        &bob,
-        &100,
-    );
+    // admin_transfer must NOT change total supply.
+    // It is admin-gated — a random address is Unauthorized.
+    client.admin_transfer(&admin, &alice, &bob, &100);
     assert_eq!(
         client.total_supply(),
         3_300,
@@ -1543,6 +1547,15 @@ fn test_total_supply_conservation_across_multi_user_ops() {
         client.total_supply(),
         "sum of balances must equal total_supply"
     );
+}
+
+#[test]
+fn test_prune_used_nonces_removes_stale_entries() {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, RewardsContract);
+    let client = RewardsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
     client.initialize(&admin, &symbol_short!("Trivela"), &symbol_short!("TVL"));
     env.mock_all_auths();
 
