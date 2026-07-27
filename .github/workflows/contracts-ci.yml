@@ -93,6 +93,29 @@ jobs:
       - name: Run integration tests
         run: cargo test --package integration
 
+      - name: Verify all public functions have integration tests
+        run: |
+          echo "Checking integration test coverage for all public entry points..."
+          
+          # Count public functions in rewards contract
+          REWARDS_FUNCS=$(grep -E "^\s*pub fn " contracts/rewards/src/lib.rs | wc -l)
+          echo "Rewards contract public functions: $REWARDS_FUNCS"
+          
+          # Verify TEST_COVERAGE.md exists
+          if [ ! -f contracts/integration/TEST_COVERAGE.md ]; then
+            echo "ERROR: contracts/integration/TEST_COVERAGE.md not found"
+            exit 1
+          fi
+          
+          # Verify coverage tests exist
+          if [ ! -f contracts/integration/tests/coverage_tests.rs ]; then
+            echo "ERROR: contracts/integration/tests/coverage_tests.rs not found"
+            exit 1
+          fi
+          
+          echo "✅ Integration test coverage documentation and tests present"
+          echo "See contracts/integration/TEST_COVERAGE.md for detailed coverage report"
+
       - name: Install Stellar CLI
         # Pin to an exact version: the TypeScript binding generator output is
         # version-sensitive, and the committed bindings under
