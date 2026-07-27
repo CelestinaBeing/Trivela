@@ -140,7 +140,7 @@ export class InvitationService {
     this.dal.organizations.acceptInvitation(invitation.id);
 
     // Log to audit
-    await this.dal.auditLogs.log({
+    await this.dal.auditLogs.create({
       entity: 'organization_member',
       entityId: member.id,
       action: 'create',
@@ -184,7 +184,7 @@ export class InvitationService {
     const revoked = this.dal.organizations.revokeInvitation(invitationId);
 
     // Log to audit
-    await this.dal.auditLogs.log({
+    await this.dal.auditLogs.create({
       entity: 'organization_invitation',
       entityId: invitationId,
       action: 'delete',
@@ -231,7 +231,7 @@ export class InvitationService {
 
     if (removed) {
       // Log to audit
-      await this.dal.auditLogs.log({
+      await this.dal.auditLogs.create({
         entity: 'organization_member',
         entityId: memberId,
         action: 'delete',
@@ -281,7 +281,7 @@ export class InvitationService {
     const updated = this.dal.organizations.updateMemberRole(memberId, newRole);
 
     // Log to audit
-    await this.dal.auditLogs.log({
+    await this.dal.auditLogs.create({
       entity: 'organization_member',
       entityId: memberId,
       action: 'update',

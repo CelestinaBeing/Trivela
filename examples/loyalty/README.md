@@ -12,7 +12,8 @@ Demonstrates a point-based loyalty campaign where users earn XLM rewards for rep
 ## Prerequisites
 
 - Node.js 18+
-- A funded Stellar testnet account (use [Stellar Laboratory](https://laboratory.stellar.org) or run `node ../sandbox/seed.js`)
+- A funded Stellar testnet account (use [Stellar Laboratory](https://laboratory.stellar.org) or run
+  `node ../sandbox/seed.js`)
 - Trivela backend running locally (`compose up` from repo root)
 
 ## Run

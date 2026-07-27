@@ -36,7 +36,9 @@ function makeDb() {
   };
 }
 
-function event(topic, data = {}, overrides = {}) {
+// Event `data` follows docs/EVENT_SCHEMA.md exactly: a scalar for single-value
+// payloads (`credit` → `amount: u64`), a tuple for multi-value ones.
+function event(topic, data = null, overrides = {}) {
   return {
     topic,
     data,
@@ -50,14 +52,28 @@ function event(topic, data = {}, overrides = {}) {
 // ── Documented event keys from EVENT_SCHEMA.md ───────────────────────────────
 
 const DOCUMENTED_EVENTS = [
-  'credit', 'claim', 'transfer', 'paused',
-  'pscredit', 'psclaim', 'psredeem',
-  'mxcredit', 'multset', 'ratlset',
-  'snapshot', 'pruned',
-  'vcredit', 'vclaim',
-  'redeem', 'refcfg', 'refbonus',
-  'aproposed', 'aaccepted',
-  'referred', 'register', 'deregister',
+  'credit',
+  'claim',
+  'transfer',
+  'paused',
+  'pscredit',
+  'psclaim',
+  'psredeem',
+  'mxcredit',
+  'multset',
+  'ratlset',
+  'snapshot',
+  'pruned',
+  'vcredit',
+  'vclaim',
+  'redeem',
+  'refcfg',
+  'refbonus',
+  'aproposed',
+  'aaccepted',
+  'referred',
+  'register',
+  'deregister',
 ];
 
 // ── Parity: credit event increases user balance ───────────────────────────────
@@ -66,16 +82,10 @@ test('credit event → balance upserted with correct amount', async () => {
   const db = makeDb();
   const indexer = createEventIndexer({ db });
 
-  await indexer.processEvent(
-    event(['credit', 'USER_ADDR'], { amount: 500 }),
-    'CONTRACT_ID',
-  );
+  await indexer.processEvent(event(['credit', 'USER_ADDR'], 500), 'CONTRACT_ID');
 
   const sqls = db.calls.map((c) => c.sql).join('\n');
-  assert.ok(
-    /balance/.test(sqls),
-    'indexer writes a balance update for credit event',
-  );
+  assert.ok(/balance/.test(sqls), 'indexer writes a balance update for credit event');
 });
 
 // ── Parity: claim event decreases user balance ────────────────────────────────
@@ -84,16 +94,10 @@ test('claim event → balance decremented with correct amount', async () => {
   const db = makeDb();
   const indexer = createEventIndexer({ db });
 
-  await indexer.processEvent(
-    event(['claim', 'USER_ADDR'], { amount: 200 }),
-    'CONTRACT_ID',
-  );
+  await indexer.processEvent(event(['claim', 'USER_ADDR'], 200), 'CONTRACT_ID');
 
   const sqls = db.calls.map((c) => c.sql).join('\n');
-  assert.ok(
-    /claim|balance/.test(sqls),
-    'indexer processes claim event',
-  );
+  assert.ok(/claim|balance/.test(sqls), 'indexer processes claim event');
 });
 
 // ── Parity: snapshot event stores correct ledger ──────────────────────────────
@@ -102,16 +106,10 @@ test('snapshot event → snapshot row stored with ledger', async () => {
   const db = makeDb();
   const indexer = createEventIndexer({ db });
 
-  await indexer.processEvent(
-    event(['snapshot', '42'], { ledger: 99 }),
-    'CONTRACT_ID',
-  );
+  await indexer.processEvent(event(['snapshot', '42'], 99), 'CONTRACT_ID');
 
   const sqls = db.calls.map((c) => c.sql).join('\n');
-  assert.ok(
-    /snapshot|indexed_events/.test(sqls),
-    'indexer processes snapshot event',
-  );
+  assert.ok(/snapshot|indexed_events/.test(sqls), 'indexer processes snapshot event');
 });
 
 // ── Parity: idempotency — duplicate tx_hash+event_index is skipped ───────────
@@ -131,10 +129,7 @@ test('duplicate event (same tx_hash + event_index) is skipped', async () => {
   });
 
   const indexer = createEventIndexer({ db });
-  await indexer.processEvent(
-    event(['credit', 'USER_ADDR'], { amount: 100 }),
-    'CONTRACT_ID',
-  );
+  await indexer.processEvent(event(['credit', 'USER_ADDR'], 100), 'CONTRACT_ID');
 
   // No run() calls should have been made (event was already indexed)
   assert.equal(
@@ -149,16 +144,33 @@ test('duplicate event (same tx_hash + event_index) is skipped', async () => {
 test('all documented event keys are handled or stored by the indexer', async () => {
   // Events that have explicit projection handlers in eventIndexer.js
   const HANDLER_KEYS = new Set([
-    'credit', 'claim', 'snapshot', 'vcredit', 'vclaim',
-    'referred', 'refbonus', 'register', 'deregister',
+    'credit',
+    'claim',
+    'snapshot',
+    'vcredit',
+    'vclaim',
+    'referred',
+    'refbonus',
+    'register',
+    'deregister',
   ]);
 
   // Events stored in indexed_events but without projection handlers
   // (audit/operational events that don't mutate derived state)
   const AUDIT_ONLY_KEYS = new Set([
-    'transfer', 'paused', 'pscredit', 'psclaim', 'psredeem',
-    'mxcredit', 'multset', 'ratlset', 'pruned', 'redeem',
-    'refcfg', 'aproposed', 'aaccepted',
+    'transfer',
+    'paused',
+    'pscredit',
+    'psclaim',
+    'psredeem',
+    'mxcredit',
+    'multset',
+    'ratlset',
+    'pruned',
+    'redeem',
+    'refcfg',
+    'aproposed',
+    'aaccepted',
   ]);
 
   for (const key of DOCUMENTED_EVENTS) {

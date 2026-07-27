@@ -87,9 +87,12 @@ export class LedgerProvider extends WalletProvider {
       throw new Error('Ledger not connected. Call connect() first.');
     }
 
-    const { Transaction, Networks, Keypair, xdr: stellarXdr } = await import(
-      '@stellar/stellar-sdk'
-    );
+    const {
+      Transaction,
+      Networks,
+      Keypair,
+      xdr: stellarXdr,
+    } = await import('@stellar/stellar-sdk');
     const Stellar = await importStellarApp();
 
     const network = options.networkPassphrase ?? Networks.PUBLIC;

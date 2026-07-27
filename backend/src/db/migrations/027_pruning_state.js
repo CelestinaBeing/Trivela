@@ -1,5 +1,6 @@
 export const version = 27;
-export const description = 'Pruning state tracking for expired nonces, snapshots, and stale indices (#1029)';
+export const description =
+  'Pruning state tracking for expired nonces, snapshots, and stale indices (#1029)';
 
 export function up(db) {
   db.exec(`

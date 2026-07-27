@@ -13,6 +13,12 @@ async function setupTestRepository(seed = []) {
   return createSqliteCampaignRepository({ db, seed });
 }
 
+// Campaigns are created as editorial drafts (the `status` column from
+// migration 009) and `list()` returns published ones by default. Tests that
+// exercise listing — featuring, hiding, search, tags — publish on create so
+// they are asserting the behaviour they mean to.
+const createListable = (repository, attrs) => repository.create({ status: 'published', ...attrs });
+
 function seedCampaigns() {
   return [
     {
@@ -213,7 +219,7 @@ test('campaign repository attaches computed status to returned campaigns', async
     rewardPerAction: 5,
     startDate: future,
   });
-  assert.equal(upcoming.status, 'upcoming');
+  assert.equal(upcoming.computedStatus, 'upcoming');
   assert.equal(upcoming.startDate, future);
 
   const ended = repository.create({
@@ -221,7 +227,7 @@ test('campaign repository attaches computed status to returned campaigns', async
     rewardPerAction: 5,
     endDate: past,
   });
-  assert.equal(ended.status, 'ended');
+  assert.equal(ended.computedStatus, 'ended');
   assert.equal(ended.endDate, past);
 
   const active = repository.create({
@@ -230,7 +236,7 @@ test('campaign repository attaches computed status to returned campaigns', async
     startDate: past,
     endDate: future,
   });
-  assert.equal(active.status, 'active');
+  assert.equal(active.computedStatus, 'active');
 });
 
 test('campaign repository update can set and clear startDate/endDate', async () => {
@@ -238,13 +244,13 @@ test('campaign repository update can set and clear startDate/endDate', async () 
   const repository = await setupTestRepository();
 
   const created = repository.create({ name: 'Test', rewardPerAction: 1 });
-  assert.equal(created.status, 'active');
+  assert.equal(created.computedStatus, 'active');
 
   const withStart = repository.update(created.id, { startDate: future });
-  assert.equal(withStart.status, 'upcoming');
+  assert.equal(withStart.computedStatus, 'upcoming');
 
   const cleared = repository.update(created.id, { startDate: null });
-  assert.equal(cleared.status, 'active');
+  assert.equal(cleared.computedStatus, 'active');
   assert.equal(cleared.startDate, null);
 });
 
@@ -252,9 +258,13 @@ test('campaign repository update can set and clear startDate/endDate', async () 
 test('featured campaigns sort before non-featured campaigns', async () => {
   const repository = await setupTestRepository();
 
-  repository.create({ name: 'Regular A', rewardPerAction: 1 });
-  const featured = repository.create({ name: 'Featured One', rewardPerAction: 1, featured: true });
-  repository.create({ name: 'Regular B', rewardPerAction: 1 });
+  createListable(repository, { name: 'Regular A', rewardPerAction: 1 });
+  const featured = createListable(repository, {
+    name: 'Featured One',
+    rewardPerAction: 1,
+    featured: true,
+  });
+  createListable(repository, { name: 'Regular B', rewardPerAction: 1 });
 
   const results = repository.list();
   assert.equal(results[0].id, featured.id);
@@ -280,8 +290,8 @@ test('update can set and unset featured flag', async () => {
 test('hidden campaigns are excluded from public list', async () => {
   const repository = await setupTestRepository();
 
-  repository.create({ name: 'Visible', rewardPerAction: 1 });
-  const hidden = repository.create({ name: 'Hidden Spam', rewardPerAction: 1 });
+  createListable(repository, { name: 'Visible', rewardPerAction: 1 });
+  const hidden = createListable(repository, { name: 'Hidden Spam', rewardPerAction: 1 });
   repository.update(hidden.id, { hidden: true, hiddenReason: 'spam' });
 
   const results = repository.list();
@@ -320,8 +330,8 @@ test('update can set and clear hidden flag and reason', async () => {
 test('list includeHidden option exposes hidden campaigns', async () => {
   const repository = await setupTestRepository();
 
-  repository.create({ name: 'Visible', rewardPerAction: 1 });
-  const hidden = repository.create({ name: 'Hidden', rewardPerAction: 1 });
+  createListable(repository, { name: 'Visible', rewardPerAction: 1 });
+  const hidden = createListable(repository, { name: 'Hidden', rewardPerAction: 1 });
   repository.update(hidden.id, { hidden: true });
 
   assert.equal(repository.list().length, 1);
@@ -332,17 +342,17 @@ test('list includeHidden option exposes hidden campaigns', async () => {
 test('FTS search supports prefix matching and ranks relevant results first', async () => {
   const repository = await setupTestRepository();
 
-  repository.create({
+  createListable(repository, {
     name: 'Soroban Builder Quest',
     description: 'Build on Soroban smart contracts',
     rewardPerAction: 10,
   });
-  repository.create({
+  createListable(repository, {
     name: 'Stellar Wave',
     description: 'Community rewards program',
     rewardPerAction: 5,
   });
-  repository.create({
+  createListable(repository, {
     name: 'Unrelated Campaign',
     description: 'Nothing matching here',
     rewardPerAction: 1,
@@ -371,13 +381,13 @@ test('empty search query returns all campaigns', async () => {
 test('campaign repository stores tags and filters by tag', async () => {
   const repository = await setupTestRepository();
 
-  repository.create({
+  createListable(repository, {
     name: 'DeFi Quest',
     rewardPerAction: 10,
     tags: ['defi', 'yield'],
     category: 'DeFi',
   });
-  repository.create({
+  createListable(repository, {
     name: 'NFT Drop',
     rewardPerAction: 5,
     tags: ['nft', 'art'],

@@ -134,8 +134,11 @@ export function createSqliteCampaignRepository({
   if (seed.length > 0) {
     const count = db.prepare('SELECT COUNT(*) AS n FROM campaigns').get().n;
     if (count === 0) {
+      // `status` must be written explicitly: the column (migration 009)
+      // defaults to 'draft', and list() only returns 'published' rows, so
+      // omitting it seeded campaigns that nothing could ever list.
       const insert = db.prepare(
-        'INSERT INTO campaigns (name, slug, description, active, featured, reward_per_action, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO campaigns (name, slug, description, active, featured, reward_per_action, start_date, end_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       const insertMany = db.transaction((rows) => {
         for (const row of rows) {
@@ -149,6 +152,7 @@ export function createSqliteCampaignRepository({
             row.rewardPerAction ?? 0,
             row.startDate ?? null,
             row.endDate ?? null,
+            row.status ?? 'published',
             createdAt,
             row.updatedAt ?? createdAt,
           );
