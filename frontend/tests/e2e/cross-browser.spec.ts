@@ -8,6 +8,9 @@ import { test, expect } from '@playwright/test';
  * - Firefox
  * - WebKit (Safari)
  *
+ * This test suite runs in CI as a matrix job, executing once per browser engine
+ * to catch browser-specific regressions early.
+ *
  * Run all browsers:
  *   npm run test:e2e
  *

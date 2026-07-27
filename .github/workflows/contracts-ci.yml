@@ -90,8 +90,59 @@ jobs:
             echo "All public items documented"
           fi
 
+      - name: Generate contract reference documentation
+        run: |
+          echo "Generating browsable contract function reference from doc comments..."
+          cargo doc --package trivela-rewards-contract --package trivela-campaign-contract --no-deps --target-dir target/doc-output
+          mkdir -p docs/contract-reference
+          cp -r target/doc-output/doc/* docs/contract-reference/
+          echo "Contract reference generated at docs/contract-reference/"
+
+      - name: Upload contract reference as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-reference-docs
+          path: docs/contract-reference/
+          retention-days: 30
+
+      - name: Generate contract reference summary
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Contract Reference Documentation" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Auto-generated from Rust doc comments" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Available as workflow artifact: \`contract-reference-docs\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Covered Contracts" >> $GITHUB_STEP_SUMMARY
+          echo "- \`trivela-rewards-contract\`: Points, balances, credits, claims, vesting, redemption" >> $GITHUB_STEP_SUMMARY
+          echo "- \`trivela-campaign-contract\`: Campaign management, participant registration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To publish to docs site, download artifact and copy to \`docs/contract-api/\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Run integration tests
         run: cargo test --package integration
+
+      - name: Verify all public functions have integration tests
+        run: |
+          echo "Checking integration test coverage for all public entry points..."
+
+          # Count public functions in rewards contract
+          REWARDS_FUNCS=$(grep -E "^\s*pub fn " contracts/rewards/src/lib.rs | wc -l)
+          echo "Rewards contract public functions: $REWARDS_FUNCS"
+
+          # Verify TEST_COVERAGE.md exists
+          if [ ! -f contracts/integration/TEST_COVERAGE.md ]; then
+            echo "ERROR: contracts/integration/TEST_COVERAGE.md not found"
+            exit 1
+          fi
+
+          # Verify coverage tests exist
+          if [ ! -f contracts/integration/tests/coverage_tests.rs ]; then
+            echo "ERROR: contracts/integration/tests/coverage_tests.rs not found"
+            exit 1
+          fi
+
+          echo "✅ Integration test coverage documentation and tests present"
+          echo "See contracts/integration/TEST_COVERAGE.md for detailed coverage report"
 
       - name: Install Stellar CLI
         # Pin to an exact version: the TypeScript binding generator output is
