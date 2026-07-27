@@ -388,19 +388,13 @@ describe('Snapshot utilities', () => {
   });
 
   test('compareShapes handles nested objects', () => {
-    const errors = compareShapes(
-      { data: { id: 1 } },
-      { data: { id: 1, name: 'required' } },
-    );
+    const errors = compareShapes({ data: { id: 1 } }, { data: { id: 1, name: 'required' } });
     assert.ok(errors.length > 0);
     assert.match(errors[0], /data\.name/);
   });
 
   test('compareShapes handles arrays', () => {
-    const errors = compareShapes(
-      { items: [{ id: 1 }] },
-      { items: [{ id: 1, name: 'required' }] },
-    );
+    const errors = compareShapes({ items: [{ id: 1 }] }, { items: [{ id: 1, name: 'required' }] });
     assert.ok(errors.length > 0);
     assert.match(errors[0], /items\[0\]\.name/);
   });

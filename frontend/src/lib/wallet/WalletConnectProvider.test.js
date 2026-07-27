@@ -76,9 +76,7 @@ describe('WalletConnectProvider', () => {
   // ── connect ────────────────────────────────────────────────────────────────
 
   it('connect throws a clear message when WalletConnect is not configured', async () => {
-    await expect(provider.connect()).rejects.toThrow(
-      'WalletConnect is not configured',
-    );
+    await expect(provider.connect()).rejects.toThrow('WalletConnect is not configured');
   });
 
   it('connect returns the Stellar address from the approved session', async () => {

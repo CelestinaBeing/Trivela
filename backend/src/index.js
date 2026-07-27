@@ -89,7 +89,10 @@ import { createPathPaymentRoutes } from './routes/pathPayment.js';
 import { createIndexReadRoutes } from './routes/indexRead.js';
 import { createSep10Routes, createRequireWalletAuth } from './routes/sep10.js';
 import { createZkInputsRoutes } from './routes/zkInputs.js';
-import { createNotificationRoutes, createNotificationPreferencesRoutes } from './routes/notifications.js';
+import {
+  createNotificationRoutes,
+  createNotificationPreferencesRoutes,
+} from './routes/notifications.js';
 import { createOperatorBalanceJob } from './jobs/operatorBalanceJob.js';
 import { createPruningJob } from './jobs/pruningJob.js';
 import { createModerationService } from './moderation/moderationService.js';
@@ -544,6 +547,14 @@ export async function createApp(options = {}) {
       /** @type {any} */ (options.referralBonus) ?? process.env.REFERRAL_BONUS,
       0,
     ),
+    // Ledgers an event must be buried under before its projection is applied.
+    // 0 projects on arrival (reorgs are still detected and reported, but land
+    // below the confirmed watermark). See jobs/eventIndexer.js. (#981)
+    confirmationDepth: normalizePositiveInteger(
+      /** @type {any} */ (options.indexerConfirmationDepth) ??
+        process.env.INDEXER_CONFIRMATION_DEPTH,
+      0,
+    ),
   });
 
   // Durable job queue store — persistent across restarts (#565)
@@ -726,10 +737,7 @@ export async function createApp(options = {}) {
   if (!options.disableJobs) {
     const pruningIntervalMs = 24 * 60 * 60 * 1000; // 24 hours
     jobRunner.enqueue('storage_pruning', null);
-    setInterval(
-      () => jobRunner.enqueue('storage_pruning', null),
-      pruningIntervalMs,
-    ).unref?.();
+    setInterval(() => jobRunner.enqueue('storage_pruning', null), pruningIntervalMs).unref?.();
   }
 
   // Daily data export — idempotent, safe to fire on every startup (#562)

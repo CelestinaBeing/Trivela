@@ -327,7 +327,9 @@ test.describe('Campaign Lifecycle E2E - Full User Journey', () => {
     console.log(`✓ Campaign updated successfully`);
   });
 
-  test('FULL JOURNEY: user completes entire flow from discovery to redemption', async ({ page }) => {
+  test('FULL JOURNEY: user completes entire flow from discovery to redemption', async ({
+    page,
+  }) => {
     console.log('\n📋 Starting full user journey test...\n');
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -383,9 +385,7 @@ test.describe('Campaign Lifecycle E2E - Full User Journey', () => {
 
       // Verify wallet connected (look for public key or connected state)
       const walletIndicator = page.getByText(new RegExp(testUserPublicKey.slice(0, 4), 'i'));
-      const isConnected = await walletIndicator
-        .isVisible({ timeout: 5_000 })
-        .catch(() => false);
+      const isConnected = await walletIndicator.isVisible({ timeout: 5_000 }).catch(() => false);
 
       if (isConnected) {
         console.log('✅ Wallet successfully connected');
@@ -405,9 +405,7 @@ test.describe('Campaign Lifecycle E2E - Full User Journey', () => {
     const participateButton = page
       .getByRole('button', { name: /participate|join|register/i })
       .first();
-    const hasParticipate = await participateButton
-      .isVisible({ timeout: 3000 })
-      .catch(() => false);
+    const hasParticipate = await participateButton.isVisible({ timeout: 3000 }).catch(() => false);
 
     if (hasParticipate) {
       console.log('✅ Participate button found');
@@ -421,9 +419,7 @@ test.describe('Campaign Lifecycle E2E - Full User Journey', () => {
     // STEP 6: User earns points (admin credits via API)
     // ═══════════════════════════════════════════════════════════════════════
     console.log('\nStep 6: User earns points for participation');
-    console.log(
-      '⚠️ Point crediting requires contract interaction (skipped in basic E2E)',
-    );
+    console.log('⚠️ Point crediting requires contract interaction (skipped in basic E2E)');
     // In full implementation: admin calls rewards.credit() via contract
 
     // ═══════════════════════════════════════════════════════════════════════

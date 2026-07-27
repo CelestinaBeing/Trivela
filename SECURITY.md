@@ -2,15 +2,18 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in Trivela, please report it responsibly by emailing **security@trivela.io** instead of using the public issue tracker.
+If you discover a security vulnerability in Trivela, please report it responsibly by emailing
+**security@trivela.io** instead of using the public issue tracker.
 
 **Please include:**
+
 - A description of the vulnerability
 - Steps to reproduce (if applicable)
 - Potential impact assessment
 - Any proof-of-concept (POC) code (optional but helpful)
 
-We will acknowledge your report within 48 hours and work with you to understand and resolve the issue.
+We will acknowledge your report within 48 hours and work with you to understand and resolve the
+issue.
 
 ## Security Standards
 
@@ -49,6 +52,7 @@ While Trivela is an open-source project, we recognize the value of security rese
 - Low severity: $100 - $500
 
 Rewards are offered at our discretion based on:
+
 - Severity and exploitability
 - Clarity and quality of the report
 - Cooperation in resolution
@@ -60,11 +64,13 @@ Rewards are offered at our discretion based on:
 3. **Day 30**: Expected patch/mitigation (varies by severity)
 4. **Day 90**: Public disclosure permitted (unless active exploit)
 
-We request a **90-day responsible disclosure window** before public disclosure, allowing time for fixes and deployment.
+We request a **90-day responsible disclosure window** before public disclosure, allowing time for
+fixes and deployment.
 
 ## Safe Harbor
 
 We will not pursue legal action against researchers who:
+
 - Report vulnerabilities in good faith
 - Avoid accessing data beyond what's necessary to demonstrate the vulnerability
 - Do not disrupt or degrade services
@@ -73,12 +79,14 @@ We will not pursue legal action against researchers who:
 
 ## Out-of-Band Communication
 
-For particularly sensitive issues, researchers may request verification of their identity before disclosure. We use standard OpenPGP keys for encrypted communication (keys available upon request).
+For particularly sensitive issues, researchers may request verification of their identity before
+disclosure. We use standard OpenPGP keys for encrypted communication (keys available upon request).
 
 ## Security Contact
 
 - **Email**: security@trivela.io
-- **GitHub Security Advisories**: [Create a private security advisory](https://github.com/FinesseStudioLab/Trivela/security/advisories)
+- **GitHub Security Advisories**:
+  [Create a private security advisory](https://github.com/FinesseStudioLab/Trivela/security/advisories)
 
 ---
 

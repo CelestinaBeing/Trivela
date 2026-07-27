@@ -75,10 +75,6 @@ pub enum Error {
     InvalidReferralConfig = 19,
     /// The computed referral bonus rounded down to zero.
     ZeroReferralBonus = 20,
-    /// Operation amount must be greater than zero (issue #1020).
-    ZeroAmount = 21,
-    /// Transfer source and destination cannot be the same address (issue #1020).
-    SelfTransfer = 22,
     /// SEP-41 token mode is not enabled.
     TokenModeNotEnabled = 21,
     /// SEP-41: allowance not sufficient for transfer_from.
@@ -92,6 +88,14 @@ pub enum Error {
     NonceReused = 27,
     DuplicateSigner = 28,
     UnknownSigner = 29,
+    /// Operation amount must be greater than zero (issue #1020).
+    ///
+    /// Assigned 30/31 rather than 21/22: the SEP-41 block already published
+    /// those codes through the generated bindings and docs/CONTRACTS_API.md,
+    /// so renumbering it would break decoding for existing clients.
+    ZeroAmount = 30,
+    /// Transfer source and destination cannot be the same address (issue #1020).
+    SelfTransfer = 31,
 }
 
 /// Vesting schedule record stored per user per vest_id.
@@ -569,9 +573,10 @@ impl RewardsContract {
         env.storage().instance().set(&key, &new_balance);
 
         let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
-        env.storage()
-            .instance()
-            .set(&TOTAL_SUPPLY, &supply.checked_add(amount).ok_or(Error::Overflow)?);
+        env.storage().instance().set(
+            &TOTAL_SUPPLY,
+            &supply.checked_add(amount).ok_or(Error::Overflow)?,
+        );
 
         env.events().publish((CREDIT_EVENT, user), amount);
         env.storage()
@@ -833,7 +838,9 @@ impl RewardsContract {
         require_admin(&env, &admin)?;
         env.storage().instance().set(&PAUSE_CREDIT, &paused);
         env.events().publish((PAUSE_CREDIT_EVENT,), paused);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
         Ok(())
     }
 
@@ -842,7 +849,9 @@ impl RewardsContract {
         require_admin(&env, &admin)?;
         env.storage().instance().set(&PAUSE_CLAIM, &paused);
         env.events().publish((PAUSE_CLAIM_EVENT,), paused);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
         Ok(())
     }
 
@@ -851,7 +860,9 @@ impl RewardsContract {
         require_admin(&env, &admin)?;
         env.storage().instance().set(&PAUSE_REDEEM, &paused);
         env.events().publish((PAUSE_REDEEM_EVENT,), paused);
-        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
         Ok(())
     }
 
@@ -1200,16 +1211,12 @@ impl RewardsContract {
         Self::redemption_reserve(env) as i128
     }
 
-    /// Redeem points for asset tokens.
-    /// Burns points_amount from user balance, transfers asset tokens to user.
     pub fn total_supply(env: Env) -> u64 {
         env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0)
     }
 
-    pub fn redeem(env: Env, user: Address, points_amount: u64) -> Result<(), Error> {
-        if points_amount == 0 {
-            return Err(Error::ZeroAmount);
-        }
+    /// Redeem points for asset tokens.
+    /// Burns points_amount from user balance, transfers asset tokens to user.
     /// Returns the amount of asset tokens transferred.
     pub fn redeem(env: Env, user: Address, points_amount: u64) -> Result<i128, Error> {
         user.require_auth();

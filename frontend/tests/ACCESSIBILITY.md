@@ -8,24 +8,25 @@ Automated accessibility testing ensures Trivela meets WCAG 2.1 Level AA standard
 
 ### Automated Checks (via axe-core)
 
-| Test | Standard | Status |
-|------|----------|--------|
-| Homepage | WCAG 2.1 AA | ✅ |
-| Campaign list | WCAG 2.1 AA | ✅ |
-| Campaign detail | WCAG 2.1 AA | ✅ |
-| Navigation | WCAG 2.1 AA | ✅ |
-| Forms & inputs | WCAG 2.1 AA | ✅ |
-| Keyboard navigation | WCAG 2.1 AA | ✅ |
-| Color contrast | WCAG 2.1 AA | ✅ |
-| Images (alt text) | WCAG 2.1 A | ✅ |
-| ARIA attributes | WCAG 2.1 AA | ✅ |
-| Heading hierarchy | WCAG 2.1 A | ✅ |
-| Button/link names | WCAG 2.1 A | ✅ |
-| Mobile touch targets | WCAG 2.1 AA | ✅ |
+| Test                 | Standard    | Status |
+| -------------------- | ----------- | ------ |
+| Homepage             | WCAG 2.1 AA | ✅     |
+| Campaign list        | WCAG 2.1 AA | ✅     |
+| Campaign detail      | WCAG 2.1 AA | ✅     |
+| Navigation           | WCAG 2.1 AA | ✅     |
+| Forms & inputs       | WCAG 2.1 AA | ✅     |
+| Keyboard navigation  | WCAG 2.1 AA | ✅     |
+| Color contrast       | WCAG 2.1 AA | ✅     |
+| Images (alt text)    | WCAG 2.1 A  | ✅     |
+| ARIA attributes      | WCAG 2.1 AA | ✅     |
+| Heading hierarchy    | WCAG 2.1 A  | ✅     |
+| Button/link names    | WCAG 2.1 A  | ✅     |
+| Mobile touch targets | WCAG 2.1 AA | ✅     |
 
 ### Violation Severity Levels
 
 **CI Build Behavior**:
+
 - ❌ **Critical**: Build fails immediately
 - ❌ **Serious**: Build fails immediately
 - ⚠️ **Moderate**: Reported, build continues
@@ -34,32 +35,39 @@ Automated accessibility testing ensures Trivela meets WCAG 2.1 Level AA standard
 ## Running Tests
 
 ### Locally (all a11y tests)
+
 ```bash
 npm run test:a11y --workspace=frontend
 ```
 
 ### Specific page
+
 ```bash
 npx playwright test tests/e2e/accessibility.spec.ts -g "Homepage"
 ```
 
 ### With UI mode (interactive debugging)
+
 ```bash
 npx playwright test tests/e2e/accessibility.spec.ts --ui
 ```
 
 ### In CI
+
 Accessibility tests run automatically in the `accessibility` job after the main frontend build.
 
 ## Viewing Results
 
 ### Test report
+
 ```bash
 npx playwright show-report
 ```
 
 ### Console output
+
 Tests log detailed violation information including:
+
 - Rule ID and description
 - Impact level (critical/serious/moderate/minor)
 - Help URL for remediation
@@ -67,6 +75,7 @@ Tests log detailed violation information including:
 - Failure summary
 
 Example output:
+
 ```
 🔍 Accessibility Scan: Homepage
    Critical: 0
@@ -83,6 +92,7 @@ Example output:
 
 **Issue**: `<img>` without `alt` attribute  
 **Fix**:
+
 ```tsx
 // ❌ Bad
 <img src="/logo.png" />
@@ -98,10 +108,12 @@ Example output:
 
 **Issue**: Text color too similar to background  
 **Minimum ratios**:
+
 - Normal text: 4.5:1
 - Large text (18pt+ or 14pt+ bold): 3:1
 
 **Fix**:
+
 ```css
 /* ❌ Bad - insufficient contrast */
 .text {
@@ -122,6 +134,7 @@ Example output:
 
 **Issue**: Input fields without associated labels  
 **Fix**:
+
 ```tsx
 // ❌ Bad
 <input type="text" placeholder="Name" />
@@ -144,6 +157,7 @@ Example output:
 
 **Issue**: Skipping heading levels (h1 → h3)  
 **Fix**:
+
 ```tsx
 // ❌ Bad
 <h1>Page Title</h1>
@@ -159,6 +173,7 @@ Example output:
 
 **Issue**: Button with icon only, no text or aria-label  
 **Fix**:
+
 ```tsx
 // ❌ Bad
 <button>
@@ -186,6 +201,7 @@ Example output:
 
 **Issue**: Focused elements have no visible indicator  
 **Fix**:
+
 ```css
 /* ❌ Bad */
 button:focus {
@@ -203,6 +219,7 @@ button:focus-visible {
 
 **Issue**: Incorrect ARIA attributes  
 **Fix**:
+
 ```tsx
 // ❌ Bad - invalid role
 <div role="invalid-role">...</div>
@@ -221,6 +238,7 @@ button:focus-visible {
 
 **Issue**: Interactive elements < 44x44px  
 **Fix**:
+
 ```css
 /* ❌ Bad */
 .icon-button {
@@ -281,14 +299,17 @@ Helpful tools for manual testing:
 ## Resources
 
 ### Standards
+
 - [WCAG 2.1](https://www.w3.org/WAI/WCAG21/quickref/)
 - [ARIA Authoring Practices](https://www.w3.org/WAI/ARIA/apg/)
 
 ### Testing
+
 - [axe-core Rules](https://github.com/dequelabs/axe-core/blob/develop/doc/rule-descriptions.md)
 - [Playwright Accessibility Testing](https://playwright.dev/docs/accessibility-testing)
 
 ### Guides
+
 - [WebAIM Quick Reference](https://webaim.org/resources/quickref/)
 - [A11y Project Checklist](https://www.a11yproject.com/checklist/)
 - [MDN Accessibility](https://developer.mozilla.org/en-US/docs/Web/Accessibility)
@@ -329,17 +350,21 @@ When CI fails due to accessibility violations:
 ## Continuous Improvement
 
 ### Monthly Review
+
 - Review moderate/minor violations
 - Prioritize fixes based on user impact
 - Update this documentation with new patterns
 
 ### Quarterly Audit
+
 - Run comprehensive manual accessibility audit
 - Test with real assistive technology users
 - Review and update automated test coverage
 
 ### Reporting Issues
+
 Found an accessibility issue not caught by tests? Please:
+
 1. File a GitHub issue with the `accessibility` label
 2. Include steps to reproduce
 3. Note the assistive technology affected

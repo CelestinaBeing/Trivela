@@ -12,7 +12,9 @@ export class RabetProvider extends WalletProvider {
 
   getApi() {
     if (!window.rabet) {
-      throw new Error('Rabet is not installed. Please install the Rabet browser extension from https://rabet.io and reload the page.');
+      throw new Error(
+        'Rabet is not installed. Please install the Rabet browser extension from https://rabet.io and reload the page.',
+      );
     }
     return window.rabet;
   }
@@ -67,8 +69,7 @@ export class RabetProvider extends WalletProvider {
 
   async signTransaction(xdr, options = {}) {
     const api = this.getApi();
-    const networkPassphrase =
-      options.networkPassphrase ?? (await this.getNetwork());
+    const networkPassphrase = options.networkPassphrase ?? (await this.getNetwork());
     const result = await api.sign(xdr, networkPassphrase);
     if (!result?.xdr) {
       throw new Error('Rabet did not return a signed transaction.');

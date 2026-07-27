@@ -36,7 +36,9 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
   // ── GET /api/v1/report-subscriptions ────────────────────────────────────────
 
   router.get('/report-subscriptions', ...auth, (req, res) => {
-    const userId = req.user?.id ?? req.headers['x-user-id'];
+    // Auth middleware decorates the request at runtime; Express's own
+    // type has no `user`.
+    const userId = /** @type {any} */ (req).user?.id ?? req.headers['x-user-id'];
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
@@ -47,7 +49,9 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
   // ── POST /api/v1/report-subscriptions ───────────────────────────────────────
 
   router.post('/report-subscriptions', ...auth, (req, res) => {
-    const userId = req.user?.id ?? req.headers['x-user-id'];
+    // Auth middleware decorates the request at runtime; Express's own
+    // type has no `user`.
+    const userId = /** @type {any} */ (req).user?.id ?? req.headers['x-user-id'];
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
@@ -56,7 +60,8 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
     const prefs = dal.notificationPreferences.getByUserId(String(userId));
     if (prefs && prefs.email_enabled === 0) {
       return res.status(403).json({
-        error: 'Email notifications are disabled for your account. Enable them in notification preferences first.',
+        error:
+          'Email notifications are disabled for your account. Enable them in notification preferences first.',
         code: 'EMAIL_OPTED_OUT',
       });
     }
@@ -64,7 +69,9 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
     const { email, reportType = 'campaign-summary', schedule = 'weekly' } = req.body ?? {};
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return res.status(400).json({ error: 'Valid email address is required', code: 'INVALID_EMAIL' });
+      return res
+        .status(400)
+        .json({ error: 'Valid email address is required', code: 'INVALID_EMAIL' });
     }
 
     if (!VALID_REPORT_TYPES.includes(reportType)) {
@@ -88,18 +95,24 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
         reportType,
         schedule,
       });
-      log.info?.(`reportSubscriptions:created userId=${userId} schedule=${schedule} type=${reportType}`);
+      log.info?.(
+        `reportSubscriptions:created userId=${userId} schedule=${schedule} type=${reportType}`,
+      );
       return res.status(201).json({ subscription });
     } catch (err) {
       log.error?.('reportSubscriptions:create_failed', err);
-      return res.status(500).json({ error: 'Failed to create subscription', code: 'INTERNAL_ERROR' });
+      return res
+        .status(500)
+        .json({ error: 'Failed to create subscription', code: 'INTERNAL_ERROR' });
     }
   });
 
   // ── PATCH /api/v1/report-subscriptions/:id ──────────────────────────────────
 
   router.patch('/report-subscriptions/:id', ...auth, (req, res) => {
-    const userId = req.user?.id ?? req.headers['x-user-id'];
+    // Auth middleware decorates the request at runtime; Express's own
+    // type has no `user`.
+    const userId = /** @type {any} */ (req).user?.id ?? req.headers['x-user-id'];
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
@@ -138,7 +151,9 @@ export function createReportSubscriptionsRouter({ dal, requireAuth, log = consol
   // Explicit opt-out. Removing a subscription stops future emails for that report.
 
   router.delete('/report-subscriptions/:id', ...auth, (req, res) => {
-    const userId = req.user?.id ?? req.headers['x-user-id'];
+    // Auth middleware decorates the request at runtime; Express's own
+    // type has no `user`.
+    const userId = /** @type {any} */ (req).user?.id ?? req.headers['x-user-id'];
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }

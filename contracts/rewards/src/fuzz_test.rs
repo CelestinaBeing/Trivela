@@ -491,7 +491,10 @@ struct BalanceModel {
 
 impl BalanceModel {
     fn new() -> Self {
-        Self { balance: 0, total_supply: 0 }
+        Self {
+            balance: 0,
+            total_supply: 0,
+        }
     }
 
     /// Returns new balance or None on ZeroAmount / overflow.
@@ -552,7 +555,7 @@ proptest! {
                     let contract_result = client.try_credit(&creditor, &user, &amount);
 
                     match (model_result, contract_result) {
-                        (Some(model_bal), Ok(contract_bal)) => {
+                        (Some(model_bal), Ok(Ok(contract_bal))) => {
                             assert_eq!(
                                 model_bal, contract_bal,
                                 "credit({amount}): model balance {model_bal} != contract balance {contract_bal}"
@@ -563,11 +566,16 @@ proptest! {
                                 "credit({amount}): total_supply diverged"
                             );
                         }
-                        (None, Err(_)) => { /* both rejected — consistent */ }
-                        (Some(mb), Err(e)) => panic!(
+                        // A contract-level Err arrives as Ok(Err(..)); a failed
+                        // invocation as Err(..). Both mean "contract rejected".
+                        (None, Ok(Err(_))) | (None, Err(_)) => { /* both rejected — consistent */ }
+                        (Some(mb), Ok(Err(e))) => panic!(
                             "credit({amount}): model accepted → {mb}, contract rejected → {e:?}"
                         ),
-                        (None, Ok(cb)) => panic!(
+                        (Some(mb), Err(e)) => panic!(
+                            "credit({amount}): model accepted → {mb}, invocation failed → {e:?}"
+                        ),
+                        (None, Ok(Ok(cb))) => panic!(
                             "credit({amount}): model rejected, contract accepted → {cb}"
                         ),
                     }
@@ -577,7 +585,7 @@ proptest! {
                     let contract_result = client.try_claim(&user, &amount);
 
                     match (model_result, contract_result) {
-                        (Some(model_bal), Ok(contract_bal)) => {
+                        (Some(model_bal), Ok(Ok(contract_bal))) => {
                             assert_eq!(
                                 model_bal, contract_bal,
                                 "claim({amount}): model balance {model_bal} != contract balance {contract_bal}"
@@ -588,11 +596,16 @@ proptest! {
                                 "claim({amount}): total_supply diverged"
                             );
                         }
-                        (None, Err(_)) => { /* both rejected — consistent */ }
-                        (Some(mb), Err(e)) => panic!(
+                        // A contract-level Err arrives as Ok(Err(..)); a failed
+                        // invocation as Err(..). Both mean "contract rejected".
+                        (None, Ok(Err(_))) | (None, Err(_)) => { /* both rejected — consistent */ }
+                        (Some(mb), Ok(Err(e))) => panic!(
                             "claim({amount}): model accepted → {mb}, contract rejected → {e:?}"
                         ),
-                        (None, Ok(cb)) => panic!(
+                        (Some(mb), Err(e)) => panic!(
+                            "claim({amount}): model accepted → {mb}, invocation failed → {e:?}"
+                        ),
+                        (None, Ok(Ok(cb))) => panic!(
                             "claim({amount}): model rejected, contract accepted → {cb}"
                         ),
                     }

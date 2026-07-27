@@ -8,9 +8,7 @@
   "active": true,
   "featured": false,
   "imageUrl": null,
-  "tags": [
-    "new"
-  ],
+  "tags": ["new"],
   "createdAt": "2024-01-02T00:00:00.000Z",
   "updatedAt": "2024-01-02T00:00:00.000Z",
   "campaignContractId": null,

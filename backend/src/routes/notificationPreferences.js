@@ -6,13 +6,15 @@ const CHANNELS = ['email', 'push', 'in_app'];
 
 const setPrefsBody = z.object({
   userAddress: z.string().min(1),
-  preferences: z.array(
-    z.object({
-      channel: z.enum(['email', 'push', 'in_app']),
-      eventType: z.string().min(1).default('*'),
-      enabled: z.boolean(),
-    }),
-  ).min(1),
+  preferences: z
+    .array(
+      z.object({
+        channel: z.enum(['email', 'push', 'in_app']),
+        eventType: z.string().min(1).default('*'),
+        enabled: z.boolean(),
+      }),
+    )
+    .min(1),
 });
 
 const getPrefsQuery = z.object({

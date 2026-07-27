@@ -12,9 +12,7 @@ export class HanaProvider extends WalletProvider {
 
   getApi() {
     if (!window?.hana?.stellar) {
-      throw new Error(
-        'Hana wallet is unavailable. Install or unlock the Hana browser extension.',
-      );
+      throw new Error('Hana wallet is unavailable. Install or unlock the Hana browser extension.');
     }
     return window.hana.stellar;
   }
@@ -59,7 +57,7 @@ export class HanaProvider extends WalletProvider {
 
   async getAddress() {
     const api = this.getApi();
-    const result = await api.getPublicKey?.() ?? await api.connect();
+    const result = (await api.getPublicKey?.()) ?? (await api.connect());
     if (!result?.publicKey && typeof result !== 'string') {
       throw new Error('No address available. Please connect your wallet first.');
     }

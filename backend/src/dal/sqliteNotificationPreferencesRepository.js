@@ -3,9 +3,19 @@ import crypto from 'node:crypto';
 
 /**
  * SQLite-backed repository for user notification preferences and unsubscribe
- * tokens (issue #1026).
+ * tokens.
  *
- * @param {{ db: import('better-sqlite3').Database }} opts
+ * Two preference models live side by side, because they answer different
+ * questions and are stored in different tables:
+ *
+ *   - per-(user, channel, event_type) opt-in (#1026), in
+ *     `notification_preferences` — `setPreference` / `getPreferences` /
+ *     `createUnsubscribeToken` / `applyUnsubscribeToken`, used by
+ *     routes/notificationPreferences.js
+ *   - per-user channel toggles with a phone number for SMS/WhatsApp (#1028),
+ *     in `notification_channel_settings` — `getOrCreate` / `get` / `update`
+ *
+ * @param {{ db: InstanceType<import('better-sqlite3')> }} opts
  */
 export function createSqliteNotificationPreferencesRepository({ db }) {
   const upsertPref = db.prepare(`
@@ -42,6 +52,27 @@ export function createSqliteNotificationPreferencesRepository({ db }) {
     DO UPDATE SET enabled = 0, updated_at = excluded.updated_at
   `);
 
+  const insertSettings = db.prepare(`
+    INSERT OR IGNORE INTO notification_channel_settings (user_id) VALUES (?)
+  `);
+
+  const getSettings = db.prepare(`
+    SELECT id, user_id, email_enabled, sms_enabled, whatsapp_enabled, phone_number,
+           created_at, updated_at
+    FROM notification_channel_settings
+    WHERE user_id = ?
+  `);
+
+  const updateSettings = db.prepare(`
+    UPDATE notification_channel_settings
+    SET email_enabled    = COALESCE(?, email_enabled),
+        sms_enabled      = COALESCE(?, sms_enabled),
+        whatsapp_enabled = COALESCE(?, whatsapp_enabled),
+        phone_number     = COALESCE(?, phone_number),
+        updated_at       = datetime('now')
+    WHERE user_id = ?
+  `);
+
   return {
     /**
      * Set a preference for a specific (user, channel, event_type) tuple.
@@ -64,7 +95,7 @@ export function createSqliteNotificationPreferencesRepository({ db }) {
     /**
      * Return all stored preferences for a user.
      * @param {string} userAddress
-     * @returns {{ channel: string; event_type: string; enabled: boolean }[]}
+     * @returns {{ channel: string; eventType: string; enabled: boolean }[]}
      */
     getPreferences(userAddress) {
       return /** @type {any[]} */ (getPrefs.all(userAddress)).map((row) => ({
@@ -110,41 +141,44 @@ export function createSqliteNotificationPreferencesRepository({ db }) {
       markTokenUsed.run(now, token);
 
       return { ok: true, userAddress: row.user_address, channel: row.channel };
-export function createSqliteNotificationPreferencesRepository({ db }) {
-  return {
+    },
+
+    // ── Per-user channel settings (#1028) ────────────────────────────────────
+
+    /**
+     * Fetch a user's channel settings, creating the default row on first use.
+     * @param {string} userId
+     */
     getOrCreate(userId) {
-      let prefs = this.get(userId);
-      if (!prefs) {
-        const stmt = db.prepare(`
-          INSERT OR IGNORE INTO notification_preferences (user_id)
-          VALUES (?)
-        `);
-        stmt.run(userId);
-        prefs = this.get(userId);
+      let settings = this.get(userId);
+      if (!settings) {
+        insertSettings.run(userId);
+        settings = this.get(userId);
       }
-      return prefs;
+      return settings;
     },
 
+    /**
+     * @param {string} userId
+     * @returns {any} the settings row, or undefined when the user has none
+     */
     get(userId) {
-      const stmt = db.prepare(`
-        SELECT id, user_id, email_enabled, sms_enabled, whatsapp_enabled, phone_number, created_at, updated_at
-        FROM notification_preferences
-        WHERE user_id = ?
-      `);
-      return stmt.get(userId);
+      return getSettings.get(userId);
     },
 
+    /**
+     * Partial update — `null`/`undefined` fields keep their stored value.
+     * @param {{ userId: string, emailEnabled?: number|null, smsEnabled?: number|null,
+     *           whatsappEnabled?: number|null, phoneNumber?: string|null }} patch
+     */
     update({ userId, emailEnabled, smsEnabled, whatsappEnabled, phoneNumber }) {
-      const stmt = db.prepare(`
-        UPDATE notification_preferences
-        SET email_enabled = COALESCE(?, email_enabled),
-            sms_enabled = COALESCE(?, sms_enabled),
-            whatsapp_enabled = COALESCE(?, whatsapp_enabled),
-            phone_number = COALESCE(?, phone_number),
-            updated_at = datetime('now')
-        WHERE user_id = ?
-      `);
-      stmt.run(emailEnabled, smsEnabled, whatsappEnabled, phoneNumber, userId);
+      updateSettings.run(
+        emailEnabled ?? null,
+        smsEnabled ?? null,
+        whatsappEnabled ?? null,
+        phoneNumber ?? null,
+        userId,
+      );
     },
   };
 }

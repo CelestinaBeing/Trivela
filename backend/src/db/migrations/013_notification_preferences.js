@@ -1,6 +1,7 @@
 // Migration 013 — notification preferences + unsubscribe (issue #1026)
 export const version = 13;
-export const description = 'Add notification_preferences table for per-user channel/event opt-in and unsubscribe tokens';
+export const description =
+  'Add notification_preferences table for per-user channel/event opt-in and unsubscribe tokens';
 
 export function up(db) {
   db.exec(`

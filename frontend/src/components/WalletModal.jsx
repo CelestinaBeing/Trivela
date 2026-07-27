@@ -2,11 +2,46 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '../lib/i18n';
 
 const WALLET_DEFS = [
-  { name: 'Freighter', descKey: 'wallet.freighter.desc', icon: '✦', installUrl: 'https://www.freighter.app', detected: () => !!window.freighterApi, comingSoon: false },
-  { name: 'xBull',     descKey: 'wallet.xbull.desc',     icon: '⊕', installUrl: 'https://xbull.app',          detected: () => !!window.xBullSDK,                       comingSoon: false },
-  { name: 'Lobstr',   descKey: 'wallet.lobstr.desc',    icon: '◎', installUrl: 'https://lobstr.co/download', detected: () => !!(window.lobstr ?? window.lobstrApi),    comingSoon: false },
-  { name: 'WalletConnect', descKey: 'wallet.walletconnect.desc', icon: '⬡', installUrl: 'https://walletconnect.com/explorer', detected: () => !!window.__walletConnectClient, comingSoon: false },
-  { name: 'Rabet',    descKey: 'wallet.rabet.desc',     icon: '◈', installUrl: 'https://rabet.io',           detected: () => !!window.rabet,                           comingSoon: false },
+  {
+    name: 'Freighter',
+    descKey: 'wallet.freighter.desc',
+    icon: '✦',
+    installUrl: 'https://www.freighter.app',
+    detected: () => !!window.freighterApi,
+    comingSoon: false,
+  },
+  {
+    name: 'xBull',
+    descKey: 'wallet.xbull.desc',
+    icon: '⊕',
+    installUrl: 'https://xbull.app',
+    detected: () => !!window.xBullSDK,
+    comingSoon: false,
+  },
+  {
+    name: 'Lobstr',
+    descKey: 'wallet.lobstr.desc',
+    icon: '◎',
+    installUrl: 'https://lobstr.co/download',
+    detected: () => !!(window.lobstr ?? window.lobstrApi),
+    comingSoon: false,
+  },
+  {
+    name: 'WalletConnect',
+    descKey: 'wallet.walletconnect.desc',
+    icon: '⬡',
+    installUrl: 'https://walletconnect.com/explorer',
+    detected: () => !!window.__walletConnectClient,
+    comingSoon: false,
+  },
+  {
+    name: 'Rabet',
+    descKey: 'wallet.rabet.desc',
+    icon: '◈',
+    installUrl: 'https://rabet.io',
+    detected: () => !!window.rabet,
+    comingSoon: false,
+  },
 ];
 
 const OVERLAY_STYLE = {

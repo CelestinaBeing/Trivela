@@ -35,7 +35,9 @@ export function createBulkCreditJobHandler({ dal, log = console }) {
       return;
     }
 
-    log.info?.(`bulkCreditJob:start jobId=${jobId} rows=${rows.length} campaignId=${campaignId ?? 'none'}`);
+    log.info?.(
+      `bulkCreditJob:start jobId=${jobId} rows=${rows.length} campaignId=${campaignId ?? 'none'}`,
+    );
 
     let succeeded = 0;
     let failed = 0;
@@ -54,7 +56,9 @@ export function createBulkCreditJobHandler({ dal, log = console }) {
         failed++;
         const message = err instanceof Error ? err.message : String(err ?? 'unknown');
         failures.push({ row: entry.row, address: entry.address, error: message });
-        log.warn?.(`bulkCreditJob:row_error jobId=${jobId} row=${entry.row} address=${entry.address} error=${message}`);
+        log.warn?.(
+          `bulkCreditJob:row_error jobId=${jobId} row=${entry.row} address=${entry.address} error=${message}`,
+        );
       }
     }
 

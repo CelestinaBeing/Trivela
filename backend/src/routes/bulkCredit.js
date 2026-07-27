@@ -36,11 +36,15 @@ export function createBulkCreditRouter({ jobQueue, jobStore, requireApiKey, log 
   // Parse and validate a CSV file. Returns a preview — nothing is written yet.
 
   router.post('/bulk-credit/upload', ...auth, csvUpload.single('file'), (req, res) => {
-    if (!req.file && !req.body?.csv) {
+    // multer decorates the request at runtime; Express's own type has no
+    // `file`, and @types/multer is not a dependency — describe what is used.
+    const upload = /** @type {{ buffer: Buffer } | undefined} */ (/** @type {any} */ (req).file);
+
+    if (!upload && !req.body?.csv) {
       return res.status(400).json({ error: 'No CSV data provided', code: 'MISSING_CSV' });
     }
 
-    const raw = req.file ? req.file.buffer.toString('utf8') : String(req.body.csv);
+    const raw = upload ? upload.buffer.toString('utf8') : String(req.body.csv);
     const { rows } = parseAllowlistCsv(raw);
 
     if (rows.length === 0) {
@@ -68,7 +72,9 @@ export function createBulkCreditRouter({ jobQueue, jobStore, requireApiKey, log 
       row: r.row,
       address: r.address,
       label: r.label ?? undefined,
-      points: r.bonus_points ? Number(r.bonus_points) || DEFAULT_POINTS_PER_ROW : DEFAULT_POINTS_PER_ROW,
+      points: r.bonus_points
+        ? Number(r.bonus_points) || DEFAULT_POINTS_PER_ROW
+        : DEFAULT_POINTS_PER_ROW,
     }));
 
     return res.json({
@@ -86,7 +92,9 @@ export function createBulkCreditRouter({ jobQueue, jobStore, requireApiKey, log 
     const { rows, campaignId } = req.body ?? {};
 
     if (!Array.isArray(rows) || rows.length === 0) {
-      return res.status(400).json({ error: 'rows must be a non-empty array', code: 'MISSING_ROWS' });
+      return res
+        .status(400)
+        .json({ error: 'rows must be a non-empty array', code: 'MISSING_ROWS' });
     }
 
     if (rows.length > MAX_ALLOWLIST_ROWS) {
@@ -118,7 +126,9 @@ export function createBulkCreditRouter({ jobQueue, jobStore, requireApiKey, log 
       return res.status(500).json({ error: 'Failed to enqueue job', code: 'ENQUEUE_FAILED' });
     }
 
-    log.info?.(`bulkCredit:enqueued jobId=${jobId} rows=${rows.length} campaignId=${campaignId ?? 'none'}`);
+    log.info?.(
+      `bulkCredit:enqueued jobId=${jobId} rows=${rows.length} campaignId=${campaignId ?? 'none'}`,
+    );
 
     return res.status(202).json({
       jobId,

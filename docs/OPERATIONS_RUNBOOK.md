@@ -2,7 +2,8 @@
 
 > **Mainnet Operations Guide**: Deploy, Verify, Monitor, and Rollback
 
-This runbook provides step-by-step procedures for operating Trivela on Stellar mainnet. All procedures are designed for production safety with verification checkpoints and rollback paths.
+This runbook provides step-by-step procedures for operating Trivela on Stellar mainnet. All
+procedures are designed for production safety with verification checkpoints and rollback paths.
 
 ---
 
@@ -42,11 +43,11 @@ git push origin --tags
 ```
 
 **Approvals Required**:
+
 - [ ] Code review approved by 2+ maintainers
 - [ ] Security review completed
 - [ ] Deployment window scheduled (announce maintenance if needed)
 - [ ] On-call engineer assigned
-
 
 ### 1.2 Contract Deployment
 
@@ -94,7 +95,6 @@ stellar contract invoke \
 
 **Rollback**: See [§4.2 Contract Rollback](#42-contract-rollback)
 
-
 ### 1.3 Backend Deployment (Blue-Green)
 
 **When**: API changes, backend features, performance improvements
@@ -137,7 +137,6 @@ kubectl scale deployment/trivela-backend-blue --replicas=1 -n trivela-prod
 ```
 
 **Rollback**: `./scripts/deploy-blue-green.sh blue`
-
 
 ### 1.4 Frontend Deployment
 
@@ -198,7 +197,6 @@ curl -f https://trivela.com/health
 curl -f https://trivela.com/api/v1/health
 # Expected: {"status":"ok","services":{"database":"healthy","rpc":"healthy"}}
 ```
-
 
 ### 2.2 Contract State Verification
 
@@ -272,7 +270,6 @@ stellar contract invoke \
 # Should return: number >= 0
 ```
 
-
 ---
 
 ## 3. Monitoring & Alerting
@@ -320,7 +317,6 @@ stellar contract invoke \
 - CPU usage >80% for >15 minutes
 - Rate limit triggers >100/minute (possible attack)
 
-
 ### 3.3 Monitoring Dashboard Setup
 
 **Grafana Dashboard Panels** (import `monitoring/grafana-dashboard.json`):
@@ -354,6 +350,7 @@ kubectl logs -l app=trivela-backend -n trivela-prod --since=15m | grep "429"
 ```
 
 **Log Retention**:
+
 - Application logs: 30 days
 - Audit logs (admin actions): 1 year
 - Access logs: 90 days
@@ -381,7 +378,6 @@ kubectl scale deployment/trivela-backend-blue --replicas=3 -n trivela-prod
 # Verify health
 curl -f https://trivela.com/health
 ```
-
 
 ### 4.2 Contract Rollback
 
@@ -439,7 +435,6 @@ curl -I https://trivela.com/ | grep "x-version"
 
 **Time to Execute**: ~5 minutes (+ CDN propagation)
 
-
 ### 4.4 Database Rollback
 
 **When**: Schema migration breaks production
@@ -469,12 +464,12 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM campaigns;"
 
 ### 5.1 Incident Severity Levels
 
-| Severity | Definition | Response Time | Example |
-|----------|-----------|---------------|---------|
-| **SEV-1** | Complete service outage | Immediate | Site down, database offline |
-| **SEV-2** | Major feature broken | <30 minutes | Contract calls failing, auth broken |
-| **SEV-3** | Minor degradation | <2 hours | Slow API, non-critical feature issue |
-| **SEV-4** | Cosmetic issue | <24 hours | UI glitch, typo in docs |
+| Severity  | Definition              | Response Time | Example                              |
+| --------- | ----------------------- | ------------- | ------------------------------------ |
+| **SEV-1** | Complete service outage | Immediate     | Site down, database offline          |
+| **SEV-2** | Major feature broken    | <30 minutes   | Contract calls failing, auth broken  |
+| **SEV-3** | Minor degradation       | <2 hours      | Slow API, non-critical feature issue |
+| **SEV-4** | Cosmetic issue          | <24 hours     | UI glitch, typo in docs              |
 
 ### 5.2 SEV-1 Incident Response
 
@@ -484,7 +479,6 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM campaigns;"
 2. **Assign IC**: Incident Commander coordinates response
 3. **Create status page**: Update https://status.trivela.com
 4. **Gather logs**: `kubectl logs` from all failing pods
-
 
 **TRIAGE** (minutes 5-15):
 
@@ -564,14 +558,13 @@ stellar contract invoke \
 # Rotate API keys if admin key was used for auth
 ```
 
-
 ### 6.2 Database Backup & Restore
 
 **Automated Daily Backups** (configured in Kubernetes CronJob):
 
 ```yaml
 # k8s/cronjob-db-backup.yaml
-schedule: "0 2 * * *" # 2 AM UTC daily
+schedule: '0 2 * * *' # 2 AM UTC daily
 command: |
   pg_dump $DATABASE_URL | gzip > /backup/trivela_prod_$(date +%Y-%m-%d).sql.gz
   aws s3 cp /backup/trivela_prod_$(date +%Y-%m-%d).sql.gz s3://trivela-db-backups/
@@ -624,10 +617,10 @@ kubectl set env deployment/trivela-backend-green DATABASE_POOL_MAX=50 -n trivela
 kubectl scale deployment/trivela-backend-green --replicas=1 -n trivela-prod
 ```
 
-
 ### 6.4 Emergency Pause Contract
 
-**When**: Critical contract bug detected, exploit in progress, or coordinated vulnerability disclosure
+**When**: Critical contract bug detected, exploit in progress, or coordinated vulnerability
+disclosure
 
 ```bash
 # Pause all contract operations immediately
@@ -682,8 +675,8 @@ kubectl delete pod -l app=trivela-backend-green -n trivela-prod
 
 ### 7.1 On-Call Rotation
 
-| Week | Primary | Secondary | Backup |
-|------|---------|-----------|--------|
+| Week    | Primary         | Secondary       | Backup          |
+| ------- | --------------- | --------------- | --------------- |
 | Current | Check PagerDuty | Check PagerDuty | Check PagerDuty |
 
 **PagerDuty**: https://trivela.pagerduty.com/schedules
@@ -707,16 +700,17 @@ kubectl delete pod -l app=trivela-backend-green -n trivela-prod
 **Review Schedule**: Quarterly (every 3 months)
 
 **Update Triggers**:
+
 - After each SEV-1/SEV-2 incident
 - After infrastructure changes
 - When new features require operational procedures
 
 **Owners**:
+
 - Primary: DevOps team
 - Reviewers: Backend team, Security team
 
-**Last Updated**: 2024-01-15
-**Next Review**: 2024-04-15
+**Last Updated**: 2024-01-15 **Next Review**: 2024-04-15
 
 ---
 
@@ -727,4 +721,3 @@ kubectl delete pod -l app=trivela-backend-green -n trivela-prod
 - [SECURITY.md](../SECURITY.md) - Security policies and incident reporting
 - [KUBERNETES.md](./KUBERNETES.md) - Kubernetes configuration reference
 - [DEPLOYMENT.md](./DEPLOYMENT.md) - Blue-green deployment details
-

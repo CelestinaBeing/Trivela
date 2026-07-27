@@ -410,7 +410,9 @@ export default function Header({
                 }}
               >
                 {SUPPORTED_LOCALES.map((l) => (
-                  <option key={l} value={l}>{LOCALE_LABELS[l] ?? l}</option>
+                  <option key={l} value={l}>
+                    {LOCALE_LABELS[l] ?? l}
+                  </option>
                 ))}
               </select>
             </div>

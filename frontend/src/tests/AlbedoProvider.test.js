@@ -3,7 +3,9 @@ import { AlbedoProvider } from '../lib/wallet/AlbedoProvider.js';
 
 function makeAlbedoApi(overrides = {}) {
   return {
-    publicKey: vi.fn().mockResolvedValue({ pubkey: 'GTEST000000000000000000000000000000000000000000000000000' }),
+    publicKey: vi
+      .fn()
+      .mockResolvedValue({ pubkey: 'GTEST000000000000000000000000000000000000000000000000000' }),
     signTransaction: vi.fn().mockResolvedValue({ signed_envelope_xdr: 'signed-xdr' }),
     ...overrides,
   };

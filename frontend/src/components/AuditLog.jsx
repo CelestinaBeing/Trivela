@@ -269,7 +269,13 @@ export default function AuditLog() {
             >
               <thead>
                 <tr style={{ background: 'var(--bg-elevated)' }}>
-                  {[t('audit.col.timestamp'), t('audit.col.actor'), t('audit.col.action'), t('audit.col.resource'), t('audit.col.details')].map((h) => (
+                  {[
+                    t('audit.col.timestamp'),
+                    t('audit.col.actor'),
+                    t('audit.col.action'),
+                    t('audit.col.resource'),
+                    t('audit.col.details'),
+                  ].map((h) => (
                     <th
                       key={h}
                       scope="col"

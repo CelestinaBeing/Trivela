@@ -72,6 +72,15 @@ export default function createApiKeyAuth({
     const authRequired = allowedKeySet.size > 0 || Boolean(apiKeyRepository?.hasActiveKeys?.());
 
     if (!authRequired) {
+      // No keys configured — the deployment has opted out of auth entirely.
+      // Say so explicitly rather than leaving req.auth unset: the downstream
+      // scope (#611) and role guards reject a request with no auth object at
+      // all, so an implicit pass here turned every write into a 403.
+      req.auth = {
+        type: 'unauthenticated',
+        source: 'unconfigured',
+        orgRole: 'owner',
+      };
       return next();
     }
 

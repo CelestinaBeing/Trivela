@@ -1,16 +1,19 @@
 # Contract Function Reference
 
-This directory contains auto-generated documentation for all public contract functions, derived directly from Rust doc comments in the source code.
+This directory contains auto-generated documentation for all public contract functions, derived
+directly from Rust doc comments in the source code.
 
 ## Generating the Reference
 
-The reference is automatically generated in CI on every pull request and available as a workflow artifact. To generate locally:
+The reference is automatically generated in CI on every pull request and available as a workflow
+artifact. To generate locally:
 
 ```bash
 npm run docs:contracts
 ```
 
 This will:
+
 1. Generate rustdoc HTML for `trivela-rewards-contract` and `trivela-campaign-contract`
 2. Copy the output to `docs/contract-api/`
 3. Include all public functions with their doc comments, parameters, and return types
@@ -28,6 +31,7 @@ The reference covers:
 ### Rewards Contract (`trivela-rewards-contract`)
 
 **Core Functions:**
+
 - `initialize` - Initialize the rewards contract
 - `credit` - Credit points to a user
 - `claim` - Claim rewards (reduces balance)
@@ -36,6 +40,7 @@ The reference covers:
 - `total_supply` - Get total points in circulation
 
 **Advanced Features:**
+
 - `credit_vested` - Credit linearly-vesting points
 - `claim_vested` - Claim from unlocked vesting schedule
 - `vested_balance` - Get unlocked but unclaimed vested balance
@@ -43,6 +48,7 @@ The reference covers:
 - `pay_referral_bonus` - Pay referrer bonus for referee action
 
 **Admin Functions:**
+
 - `set_paused` - Pause/unpause the contract (multisig-enabled)
 - `set_max_credit_per_call` - Set per-call credit limit
 - `set_campaign_multiplier` - Set campaign-specific multiplier
@@ -52,6 +58,7 @@ The reference covers:
 - `migrate` - Storage schema migration
 
 **SEP-41 Token Interface:**
+
 - `sep41_balance` - Get balance as i128
 - `sep41_transfer` - Transfer tokens
 - `sep41_approve` - Set allowance
@@ -64,6 +71,7 @@ Covers campaign management, participant registration, and campaign lifecycle fun
 ## CI Integration
 
 The contract reference is:
+
 - ✅ Generated automatically on every PR
 - ✅ Validated for documentation completeness (no missing doc comments)
 - ✅ Available as a workflow artifact with 30-day retention
@@ -79,11 +87,13 @@ git add docs/contract-api/
 git commit -m "docs: update contract function reference"
 ```
 
-Alternatively, download the `contract-reference-docs` artifact from any CI run and extract to `docs/contract-api/`.
+Alternatively, download the `contract-reference-docs` artifact from any CI run and extract to
+`docs/contract-api/`.
 
 ## Format
 
 The reference is generated as HTML using rustdoc, with:
+
 - **Function signatures** with parameter types and return values
 - **Doc comment** explanations from source code
 - **Cross-references** between related functions
@@ -92,7 +102,8 @@ The reference is generated as HTML using rustdoc, with:
 
 ## Maintenance
 
-The reference is **always current** because it's generated directly from source code. As contract functions are added, removed, or modified, the reference automatically reflects those changes.
+The reference is **always current** because it's generated directly from source code. As contract
+functions are added, removed, or modified, the reference automatically reflects those changes.
 
 ## Related Documentation
 

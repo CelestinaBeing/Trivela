@@ -8,12 +8,15 @@ const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
 test.describe('Rabet wallet integration (#1009)', () => {
   test.beforeEach(async ({ page }) => {
     // Inject a mock Rabet extension before the app boots.
-    await page.addInitScript(({ addr, net }) => {
-      window.rabet = {
-        connect: () => Promise.resolve({ publicKey: addr, network: net }),
-        sign: (xdr, _passphrase) => Promise.resolve({ xdr: 'mock-signed-' + xdr }),
-      };
-    }, { addr: MOCK_ADDRESS, net: TESTNET_PASSPHRASE });
+    await page.addInitScript(
+      ({ addr, net }) => {
+        window.rabet = {
+          connect: () => Promise.resolve({ publicKey: addr, network: net }),
+          sign: (xdr, _passphrase) => Promise.resolve({ xdr: 'mock-signed-' + xdr }),
+        };
+      },
+      { addr: MOCK_ADDRESS, net: TESTNET_PASSPHRASE },
+    );
   });
 
   test('Rabet wallet is detected as available', async ({ page }) => {

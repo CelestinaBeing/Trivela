@@ -10,7 +10,9 @@
 **Visual**: Trivela logo animation, fade to platform homepage
 
 **Voiceover**:
-> "Trivela: The Stellar-native platform for transparent, composable campaign rewards. Let's see how it works."
+
+> "Trivela: The Stellar-native platform for transparent, composable campaign rewards. Let's see how
+> it works."
 
 ---
 
@@ -19,7 +21,11 @@
 **Visual**: Split screen showing traditional loyalty programs vs. Web3 campaigns
 
 **Voiceover**:
-> "Traditional loyalty programs are centralized, opaque, and lock users into walled gardens. Web3 campaigns promise better, but suffer from complexity, poor user experience, and fragmentation. Users need something better: rewards that are truly theirs, rules that are transparent, and experiences that just work."
+
+> "Traditional loyalty programs are centralized, opaque, and lock users into walled gardens. Web3
+> campaigns promise better, but suffer from complexity, poor user experience, and fragmentation.
+> Users need something better: rewards that are truly theirs, rules that are transparent, and
+> experiences that just work."
 
 ---
 
@@ -28,7 +34,12 @@
 **Visual**: Trivela homepage → feature highlights → Soroban logo
 
 **Voiceover**:
-> "Trivela solves this with Soroban smart contracts on Stellar. Points are real assets—SEP-41 compliant tokens owned by users, not held by the platform. Campaign rules live on-chain, auditable by anyone. Claims happen instantly with no custody delays. And because rewards are composable, users can integrate them with DeFi, trade them, or use them across applications. This is the future of loyalty: decentralized, transparent, and user-owned."
+
+> "Trivela solves this with Soroban smart contracts on Stellar. Points are real assets—SEP-41
+> compliant tokens owned by users, not held by the platform. Campaign rules live on-chain, auditable
+> by anyone. Claims happen instantly with no custody delays. And because rewards are composable,
+> users can integrate them with DeFi, trade them, or use them across applications. This is the
+> future of loyalty: decentralized, transparent, and user-owned."
 
 ---
 
@@ -37,7 +48,10 @@
 **Visual**: Screen recording of campaign creation form
 
 **Voiceover**:
-> "Creating a campaign is simple. Set your reward amount, participant cap, and eligibility rules. Want an allowlist? Upload a CSV and we'll generate the merkle tree. Configure vesting schedules, referral bonuses, and rate limits. Then deploy to Soroban with one click—no coding required."
+
+> "Creating a campaign is simple. Set your reward amount, participant cap, and eligibility rules.
+> Want an allowlist? Upload a CSV and we'll generate the merkle tree. Configure vesting schedules,
+> referral bonuses, and rate limits. Then deploy to Soroban with one click—no coding required."
 
 **On-screen text**: "Deploy in seconds"
 
@@ -48,7 +62,11 @@
 **Visual**: User flow: discover → connect → earn → view balance
 
 **Voiceover**:
-> "From the user side, it's even simpler. Browse campaigns, connect your Freighter wallet with one click, complete an action—maybe a social media task or an on-chain interaction—and points are credited instantly. Check your balance anytime, view vesting schedules, and track your progress. The entire history is on-chain, so you always know where you stand."
+
+> "From the user side, it's even simpler. Browse campaigns, connect your Freighter wallet with one
+> click, complete an action—maybe a social media task or an on-chain interaction—and points are
+> credited instantly. Check your balance anytime, view vesting schedules, and track your progress.
+> The entire history is on-chain, so you always know where you stand."
 
 **On-screen text**: "Instant credits • Full transparency"
 
@@ -59,7 +77,11 @@
 **Visual**: Claim flow: select amount → sign transaction → tokens received
 
 **Voiceover**:
-> "When you're ready to claim, select your amount and sign the transaction. The smart contract transfers tokens directly to your wallet—no intermediary, no delays. You can hold them, trade them, or use them in DeFi. These are real assets you control, not database entries in someone else's system."
+
+> "When you're ready to claim, select your amount and sign the transaction. The smart contract
+> transfers tokens directly to your wallet—no intermediary, no delays. You can hold them, trade
+> them, or use them in DeFi. These are real assets you control, not database entries in someone
+> else's system."
 
 **On-screen text**: "Your keys, your tokens"
 
@@ -70,7 +92,10 @@
 **Visual**: Admin dashboard showing analytics, pause button, rate limit config
 
 **Voiceover**:
-> "Campaign creators get powerful admin tools: real-time analytics, emergency pause controls for security incidents, rate limiting to prevent abuse, and snapshot capabilities for airdrops. Everything you need to run professional-grade campaigns."
+
+> "Campaign creators get powerful admin tools: real-time analytics, emergency pause controls for
+> security incidents, rate limiting to prevent abuse, and snapshot capabilities for airdrops.
+> Everything you need to run professional-grade campaigns."
 
 **On-screen text**: "Production-ready tooling"
 
@@ -81,7 +106,10 @@
 **Visual**: Architecture diagram → GitHub → Audit badge
 
 **Voiceover**:
-> "Under the hood, Trivela is built on Stellar and Soroban, leveraging their speed, low costs, and eco-friendly proof-of-stake. The codebase is open source under Apache 2.0, the contracts are audited, and the platform is production-ready today."
+
+> "Under the hood, Trivela is built on Stellar and Soroban, leveraging their speed, low costs, and
+> eco-friendly proof-of-stake. The codebase is open source under Apache 2.0, the contracts are
+> audited, and the platform is production-ready today."
 
 **On-screen text**: "Open Source • Audited • Production Ready"
 
@@ -92,9 +120,13 @@
 **Visual**: Demo site → Docs site → GitHub repo
 
 **Voiceover**:
-> "Ready to try it? Visit demo dot trivela dot com for a live interactive demo. Check out our documentation at docs dot trivela dot com. And explore the code on GitHub. Trivela: Rewards, reimagined for Web3."
+
+> "Ready to try it? Visit demo dot trivela dot com for a live interactive demo. Check out our
+> documentation at docs dot trivela dot com. And explore the code on GitHub. Trivela: Rewards,
+> reimagined for Web3."
 
 **On-screen text**:
+
 - `demo.trivela.com`
 - `docs.trivela.com`
 - `github.com/FinesseStudioLab/Trivela`
@@ -112,29 +144,33 @@ For shorter format presentations:
 **[0:10-0:30]** Solution + differentiators  
 **[0:30-1:15]** Quick demo (campaign creation → earning → claiming)  
 **[1:15-1:45]** Technical highlights + traction  
-**[1:45-2:00]** CTA  
+**[1:45-2:00]** CTA
 
 ---
 
 ## Production Notes
 
 ### Pacing
+
 - Speak clearly at ~150 words per minute
 - Pause 2 seconds between major sections
 - Allow visuals to "breathe" (don't talk over key UI moments)
 
 ### Visual Timing
+
 - Show each screen for at least 3 seconds
 - Highlight clicks with cursor pulse effect
 - Use zoom-in for small UI elements
 - Add callout boxes for key features
 
 ### Music
+
 - Background music at -20dB (subtle)
 - Upbeat, professional (not distracting)
 - Fade in/out at section transitions
 
 ### Captions
+
 - Add captions for accessibility
 - Proofread carefully (auto-captions often wrong)
 - Use large, readable font (sans-serif, 24pt+)
@@ -175,7 +211,6 @@ Before publishing, verify:
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0 | 2024-01-15 | Initial script |
-
+| Version | Date       | Changes        |
+| ------- | ---------- | -------------- |
+| 1.0     | 2024-01-15 | Initial script |

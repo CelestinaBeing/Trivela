@@ -116,7 +116,9 @@ async function sendWithRetry(payload) {
   const providerName = (process.env.EMAIL_PROVIDER ?? 'resend').toLowerCase();
   const send = PROVIDERS[providerName];
   if (!send) {
-    throw new Error(`Unknown EMAIL_PROVIDER "${providerName}". Supported: ${Object.keys(PROVIDERS).join(', ')}`);
+    throw new Error(
+      `Unknown EMAIL_PROVIDER "${providerName}". Supported: ${Object.keys(PROVIDERS).join(', ')}`,
+    );
   }
 
   let lastError;
@@ -153,7 +155,9 @@ async function sendWithRetry(payload) {
 export async function sendEmail(templateId, to, vars = {}) {
   const template = TEMPLATES[templateId];
   if (!template) {
-    throw new Error(`Unknown email template "${templateId}". Available: ${Object.keys(TEMPLATES).join(', ')}`);
+    throw new Error(
+      `Unknown email template "${templateId}". Available: ${Object.keys(TEMPLATES).join(', ')}`,
+    );
   }
 
   const from = process.env.EMAIL_FROM ?? 'noreply@trivela.io';

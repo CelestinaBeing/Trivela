@@ -66,6 +66,12 @@ export default defineConfig({
   ],
   build: {
     rollupOptions: {
+      // The LedgerHQ libraries are optional: LedgerProvider imports them
+      // dynamically and catches the failure to show "Ledger transport library
+      // is not installed". Leaving them external keeps that contract — the
+      // import fails at runtime and is handled — instead of failing the build
+      // for every user who does not need hardware-wallet support.
+      external: ['@ledgerhq/hw-transport-webusb', '@ledgerhq/hw-app-stellar'],
       output: {
         // Vendor code splitting — keeps the initial bundle lean by hoisting
         // stable third-party packages into separately cacheable chunks.

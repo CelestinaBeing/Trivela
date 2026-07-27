@@ -23,10 +23,7 @@ export function I18nProvider({ children, initialLocale = 'en' }) {
     }
   }, []);
 
-  const t = useCallback(
-    (key, fallback = key) => catalog[key] ?? fallback,
-    [catalog],
-  );
+  const t = useCallback((key, fallback = key) => catalog[key] ?? fallback, [catalog]);
 
   return I18nContext.Provider({ value: { locale, loadLocale, t }, children });
 }

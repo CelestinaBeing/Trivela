@@ -92,7 +92,10 @@ export function requireScope(scope) {
     }
 
     // Env-sourced keys are fully trusted (no scope restriction).
-    if (auth.source === 'env') {
+    // Env-sourced keys, and deployments with no keys configured at all, are
+    // fully trusted. `req.auth` still has to exist — a genuinely missing auth
+    // object keeps failing closed above.
+    if (auth.source === 'env' || auth.source === 'unconfigured') {
       return next();
     }
 

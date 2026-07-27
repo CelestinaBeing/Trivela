@@ -6,7 +6,11 @@ const TEST_ADDRESS = 'GCEZWKCA5VLDNRLN3RPRJMRZOX3Z6G5CHCGZS4';
 const TESTNET_PASSPHRASE = 'Test SDF Network ; September 2015';
 const MAINNET_PASSPHRASE = 'Public Global Stellar Network ; September 2015';
 
-function makeRabetApi({ publicKey = TEST_ADDRESS, network = TESTNET_PASSPHRASE, signedXdr = 'signedXDR123' } = {}) {
+function makeRabetApi({
+  publicKey = TEST_ADDRESS,
+  network = TESTNET_PASSPHRASE,
+  signedXdr = 'signedXDR123',
+} = {}) {
   return {
     connect: vi.fn().mockResolvedValue({ publicKey, network }),
     sign: vi.fn().mockResolvedValue({ xdr: signedXdr }),
@@ -125,7 +129,9 @@ describe('RabetProvider (#1009)', () => {
 
     it('throws when Rabet returns no signed XDR', async () => {
       window.rabet = {
-        connect: vi.fn().mockResolvedValue({ publicKey: TEST_ADDRESS, network: TESTNET_PASSPHRASE }),
+        connect: vi
+          .fn()
+          .mockResolvedValue({ publicKey: TEST_ADDRESS, network: TESTNET_PASSPHRASE }),
         sign: vi.fn().mockResolvedValue({}),
       };
       await expect(

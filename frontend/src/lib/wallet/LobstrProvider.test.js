@@ -56,9 +56,11 @@ describe('LobstrProvider.connect', () => {
   beforeEach(clearLobstr);
 
   it('connects via api.connect() and returns publicKey', async () => {
-    setLobstr(makeLobstrApi({
-      connect: vi.fn().mockResolvedValue({ publicKey: 'GCONNECTED' }),
-    }));
+    setLobstr(
+      makeLobstrApi({
+        connect: vi.fn().mockResolvedValue({ publicKey: 'GCONNECTED' }),
+      }),
+    );
     const provider = new LobstrProvider();
     const address = await provider.connect();
     expect(address).toBe('GCONNECTED');
@@ -82,9 +84,11 @@ describe('LobstrProvider.connect', () => {
   });
 
   it('throws when connect returns no address', async () => {
-    setLobstr(makeLobstrApi({
-      connect: vi.fn().mockResolvedValue({}),
-    }));
+    setLobstr(
+      makeLobstrApi({
+        connect: vi.fn().mockResolvedValue({}),
+      }),
+    );
     const provider = new LobstrProvider();
     await expect(provider.connect()).rejects.toThrow(/did not return a wallet address/i);
     clearLobstr();
@@ -146,9 +150,11 @@ describe('LobstrProvider.signTransaction', () => {
   });
 
   it('throws when signed result is empty', async () => {
-    setLobstr(makeLobstrApi({
-      signTransaction: vi.fn().mockResolvedValue({}),
-    }));
+    setLobstr(
+      makeLobstrApi({
+        signTransaction: vi.fn().mockResolvedValue({}),
+      }),
+    );
     const provider = new LobstrProvider();
     await expect(provider.signTransaction('raw-xdr', {})).rejects.toThrow(
       /did not return a signed transaction/i,
@@ -213,7 +219,9 @@ describe('LobstrProvider network detection', () => {
     const api = makeLobstrApi();
     setLobstr(api);
     const provider = new LobstrProvider();
-    await provider.signTransaction('xdr', { networkPassphrase: 'Test SDF Network ; December 2021' });
+    await provider.signTransaction('xdr', {
+      networkPassphrase: 'Test SDF Network ; December 2021',
+    });
     expect(api.signTransaction).toHaveBeenCalledWith(
       'xdr',
       expect.objectContaining({ networkPassphrase: 'Test SDF Network ; December 2021' }),
