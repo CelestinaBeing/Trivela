@@ -1710,13 +1710,10 @@ impl RewardsContract {
         env.storage().instance().get(&TOKEN_DECIMALS).unwrap_or(0)
     }
 
-    /// SEP-41: Returns the name of the token.
-    pub fn sep41_name(env: Env) -> Symbol {
-        env.storage()
-            .instance()
-            .get(&TOKEN_NAME)
-            .unwrap_or_else(|| symbol_short!("Trivela"))
-    }
+pub fn sep41_name(env: Env) -> soroban_sdk::String {
+    let sym: Symbol = env.storage().instance().get(&TOKEN_NAME).unwrap_or_else(|| symbol_short!("Trivela"));
+    soroban_sdk::String::from_str(&env, &sym.to_string())
+}
 
     /// SEP-41: Returns the symbol of the token.
     pub fn sep41_symbol(env: Env) -> Symbol {
