@@ -44,6 +44,13 @@ use soroban_sdk::{
     Bytes, BytesN, Env, Symbol, Vec,
 };
 
+mod poseidon;
+mod merkle;
+#[cfg(test)]
+mod poseidon_merkle_tests;
+#[cfg(test)]
+mod poseidon_vs_sha256_bench;
+
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
