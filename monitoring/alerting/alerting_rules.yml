@@ -189,6 +189,25 @@ groups:
           description: '{{ $value }} DB write errors on the campaigns table in the last 5 minutes.'
           runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#db-backup-restore'
 
+  # ── Job queues ──────────────────────────────────────────────────────────────
+  - name: trivela_jobs
+    interval: 60s
+    rules:
+      # Durable queue backlog not draining (issue #930 — job queue depth metric)
+      - alert: JobQueueBacklog
+        expr: |
+          trivela_job_queue_depth{job="trivela-backend",queue="durable"} > 100
+        for: 10m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: 'Durable job queue backlog is growing'
+          description: >-
+            {{ $value }} jobs pending in the durable queue for over 10 minutes. The poller may be
+            stuck behind a slow handler, or jobs are being enqueued faster than they can drain.
+          runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#job-queue-backlog'
+
   # ── DLQ ─────────────────────────────────────────────────────────────────────
   - name: trivela_dlq
     interval: 60s
