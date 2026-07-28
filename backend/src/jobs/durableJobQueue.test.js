@@ -179,6 +179,25 @@ test('durableJobQueue: listDead and countDead pagination', async () => {
   queue.stop();
 });
 
+test('durableJobQueue: getStatus reports pending/running/dead depth (#930)', async () => {
+  const { store, queue } = await setup({});
+  const now = new Date().toISOString();
+
+  assert.deepEqual(queue.getStatus(), { pending: 0, running: 0, dead: 0 });
+
+  store.enqueue({ type: 'job', payload: null, runAt: now, enqueuedAt: now, maxAttempts: 1 });
+  store.enqueue({ type: 'job', payload: null, runAt: now, enqueuedAt: now, maxAttempts: 1 });
+  assert.deepEqual(queue.getStatus(), { pending: 2, running: 0, dead: 0 });
+
+  const claimed = store.claimNext(60_000);
+  assert.deepEqual(queue.getStatus(), { pending: 1, running: 1, dead: 0 });
+
+  store.nack(claimed.id, { isDead: true, errorMessage: 'boom' });
+  assert.deepEqual(queue.getStatus(), { pending: 1, running: 0, dead: 1 });
+
+  queue.stop();
+});
+
 test('durableJobQueue: removeById deletes a job', async () => {
   const { store, queue } = await setup({});
   const now = new Date().toISOString();

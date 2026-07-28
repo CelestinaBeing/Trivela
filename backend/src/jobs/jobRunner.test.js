@@ -202,3 +202,38 @@ test('jobRunner uses environment-driven defaults when enqueue omits options', as
   assert.equal(attempts, 2, 'runner should respect defaultMaxAttempts');
   assert.equal(observedMaxAttempts, 2);
 });
+
+test('jobRunner getStatus reports queue depth and in-flight state (#930)', async () => {
+  let resolveStarted;
+  const started = new Promise((resolve) => {
+    resolveStarted = resolve;
+  });
+  let resolveHandler;
+  const runner = createJobRunner({
+    handlers: {
+      slow: () =>
+        new Promise((resolve) => {
+          resolveStarted();
+          resolveHandler = resolve;
+        }),
+    },
+    logger: silentLogger(),
+  });
+
+  assert.deepEqual(runner.getStatus(), { queued: 0, running: 0 });
+
+  runner.enqueue('slow', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+  runner.enqueue('other', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+
+  await started;
+  assert.deepEqual(runner.getStatus(), { queued: 1, running: 1 });
+
+  resolveHandler();
+  const deadline = Date.now() + 500;
+  while (runner.getStatus().running === 1 && Date.now() < deadline) {
+    await tick(5);
+  }
+  runner.stop();
+
+  assert.deepEqual(runner.getStatus(), { queued: 0, running: 0 });
+});
