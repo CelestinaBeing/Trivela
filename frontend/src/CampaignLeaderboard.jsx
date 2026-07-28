@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiUrl } from './config';
 import Header from './components/Header';
 import VirtualizedList from './components/VirtualizedList';
+import EmptyState from './components/EmptyState';
 import './CampaignLeaderboard.css';
 
 const PAGE_LIMIT = 20;
@@ -325,15 +326,15 @@ export default function CampaignLeaderboard({
                   </button>
                 </div>
               ) : participants.length === 0 ? (
-                <div className="lb-state lb-empty">
-                  <p className="lb-empty-icon">🏁</p>
-                  <p className="lb-empty-heading">No participants yet</p>
-                  <p className="lb-empty-sub">
-                    {debouncedSearch
+                <EmptyState
+                  eyebrow="Leaderboard"
+                  title="🏁 No participants yet"
+                  description={
+                    debouncedSearch
                       ? 'No participants match that wallet address.'
-                      : 'Be the first to join this campaign and top the leaderboard!'}
-                  </p>
-                </div>
+                      : 'Be the first to join this campaign and top the leaderboard!'
+                  }
+                />
               ) : (
                 <VirtualizedList
                   items={participants}
