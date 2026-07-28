@@ -6,6 +6,8 @@ import App from './App';
 import ErrorBoundary from './ErrorBoundary';
 import PwaStatus from './components/PwaStatus';
 import { I18nProvider } from './lib/i18n';
+import { ToastProvider } from './lib/toast/ToastProvider';
+import ToastViewport from './lib/toast/ToastViewport';
 import './i18n/index.js';
 import './index.css';
 
@@ -24,9 +26,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HelmetProvider>
       <I18nProvider>
-        <BrowserRouter>
-          <RoutedApp />
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter>
+            <RoutedApp />
+          </BrowserRouter>
+          <ToastViewport />
+        </ToastProvider>
       </I18nProvider>
     </HelmetProvider>
   </React.StrictMode>,

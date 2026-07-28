@@ -6,6 +6,7 @@ import Header from './components/Header';
 import RegisterCampaign from './RegisterCampaign';
 import StatusBadge from './components/StatusBadge';
 import PageMeta from './components/PageMeta';
+import ErrorBoundary from './ErrorBoundary';
 import { useCampaignLiveUpdates } from './hooks/useCampaignLiveUpdates';
 import './CampaignDetail.css';
 
@@ -254,23 +255,25 @@ export default function CampaignDetail({
 
               <div className="detail-body">
                 {onChainState ? (
-                  <section className="detail-section detail-on-chain">
-                    <h2>On-chain status</h2>
-                    <div className="detail-grid">
-                      <div className="detail-stat">
-                        <h3>Contract active</h3>
-                        <p className="stat-value">{onChainState.isActive ? 'Yes' : 'No'}</p>
+                  <ErrorBoundary as="div">
+                    <section className="detail-section detail-on-chain">
+                      <h2>On-chain status</h2>
+                      <div className="detail-grid">
+                        <div className="detail-stat">
+                          <h3>Contract active</h3>
+                          <p className="stat-value">{onChainState.isActive ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div className="detail-stat">
+                          <h3>Within window</h3>
+                          <p className="stat-value">{onChainState.isWithinWindow ? 'Yes' : 'No'}</p>
+                        </div>
+                        <div className="detail-stat">
+                          <h3>Participants</h3>
+                          <p className="stat-value">{onChainState.participantCount}</p>
+                        </div>
                       </div>
-                      <div className="detail-stat">
-                        <h3>Within window</h3>
-                        <p className="stat-value">{onChainState.isWithinWindow ? 'Yes' : 'No'}</p>
-                      </div>
-                      <div className="detail-stat">
-                        <h3>Participants</h3>
-                        <p className="stat-value">{onChainState.participantCount}</p>
-                      </div>
-                    </div>
-                  </section>
+                    </section>
+                  </ErrorBoundary>
                 ) : null}
 
                 <section className="detail-section">
