@@ -943,6 +943,8 @@ export async function createApp(options = {}) {
 
     // RPC pool saturation metrics.
     const poolStatus = rpcPool.getStatus();
+    const jobRunnerStatus = jobRunner.getStatus();
+    const durableJobQueueStatus = durableJobQueue.getStatus();
 
     const payload = [
       '# HELP trivela_requests_total Total HTTP requests handled.',
@@ -985,6 +987,22 @@ export async function createApp(options = {}) {
       '# HELP trivela_rpc_pool_unhealthy Unhealthy RPC endpoints in the pool.',
       '# TYPE trivela_rpc_pool_unhealthy gauge',
       `trivela_rpc_pool_unhealthy ${poolStatus.unhealthy}`,
+      // Job queue depth (issue #930 — RED + queue + RPC metrics).
+      '# HELP trivela_job_queue_depth Jobs waiting to run, by queue.',
+      '# TYPE trivela_job_queue_depth gauge',
+      `trivela_job_queue_depth{queue="in_memory"} ${jobRunnerStatus.queued}`,
+      `trivela_job_queue_depth{queue="durable"} ${durableJobQueueStatus.pending}`,
+      '# HELP trivela_job_queue_running Jobs currently executing, by queue.',
+      '# TYPE trivela_job_queue_running gauge',
+      `trivela_job_queue_running{queue="in_memory"} ${jobRunnerStatus.running}`,
+      `trivela_job_queue_running{queue="durable"} ${durableJobQueueStatus.running}`,
+      '# HELP trivela_job_queue_dead_total Jobs moved to the dead-letter queue after exhausting retries.',
+      '# TYPE trivela_job_queue_dead_total gauge',
+      `trivela_job_queue_dead_total{queue="durable"} ${durableJobQueueStatus.dead}`,
+      // Cross-queue dead-letter size (feeds the pre-existing DLQGrowth alert).
+      '# HELP trivela_dlq_size_total Total jobs (across all queues) in the dead-letter store.',
+      '# TYPE trivela_dlq_size_total gauge',
+      `trivela_dlq_size_total ${failedJobRepository.count()}`,
       // Indexer metrics (#532).
       ...Object.entries(eventIndexer?.getMetrics?.() ?? {})
         .map(([key, value]) => [
