@@ -203,6 +203,14 @@ paths:
           schema:
             type: string
             enum: [asc, desc]
+        - name: status
+          in: query
+          description: >-
+            Filter by campaign status. Defaults to `published` for public (no API key) requests.
+            Requesting `draft`, `archived`, or `all` requires an API key.
+          schema:
+            type: string
+            enum: [draft, published, archived, all]
       responses:
         '200':
           description: Paginated campaign list
@@ -210,6 +218,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignListResponse'
+        '401':
+          description: API key required to access draft, archived, or all campaigns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       summary: Create a new campaign
@@ -1425,7 +1439,10 @@ paths:
                   type: string
       responses:
         '202':
-          description: Job queued; returns created/skipped counts
+          description: >-
+            Submission enqueued on the durable job queue; returns { ok, campaignId, jobId, status:
+            "queued" } immediately. Poll GET on this same path to see rows move pending ->
+            created/failed.
         '404':
           description: Campaign not found
     get:
@@ -1535,8 +1552,8 @@ components:
           description: Campaign end date
         status:
           type: string
-          enum: [active, upcoming, ended]
-          description: Computed campaign status
+          enum: [draft, published, archived]
+          description: Campaign publish-workflow status
         createdAt:
           type: string
           format: date-time
