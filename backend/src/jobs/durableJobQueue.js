@@ -139,5 +139,17 @@ export function createDurableJobQueue(
     }
   }
 
-  return { enqueue, start, stop };
+  /**
+   * Queue depth snapshot for monitoring (#930): counts pending/running jobs
+   * and the dead-letter backlog directly from the store.
+   */
+  function getStatus() {
+    return {
+      pending: store.countByStatus('pending'),
+      running: store.countByStatus('running'),
+      dead: store.countDead(),
+    };
+  }
+
+  return { enqueue, start, stop, getStatus };
 }
