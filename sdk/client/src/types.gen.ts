@@ -50,9 +50,9 @@ export type Campaign = {
      */
     endDate?: string;
     /**
-     * Computed campaign status
+     * Campaign publish-workflow status
      */
-    status: 'active' | 'upcoming' | 'ended';
+    status: 'draft' | 'published' | 'archived';
     /**
      * Creation timestamp
      */
@@ -643,9 +643,22 @@ export type ListCampaignsData = {
          * Sort order
          */
         order?: 'asc' | 'desc';
+        /**
+         * Filter by campaign status. Defaults to `published` for public (no API key) requests. Requesting `draft`, `archived`, or `all` requires an API key.
+         */
+        status?: 'draft' | 'published' | 'archived' | 'all';
     };
     url: '/api/v1/campaigns';
 };
+
+export type ListCampaignsErrors = {
+    /**
+     * API key required to access draft, archived, or all campaigns
+     */
+    401: Error;
+};
+
+export type ListCampaignsError = ListCampaignsErrors[keyof ListCampaignsErrors];
 
 export type ListCampaignsResponses = {
     /**
@@ -1782,7 +1795,7 @@ export type PostApiV1CampaignsByIdClaimableBalancesErrors = {
 
 export type PostApiV1CampaignsByIdClaimableBalancesResponses = {
     /**
-     * Job queued; returns created/skipped counts
+     * Submission enqueued on the durable job queue; returns { ok, campaignId, jobId, status: "queued" } immediately. Poll GET on this same path to see rows move pending -> created/failed.
      */
     202: unknown;
 };
