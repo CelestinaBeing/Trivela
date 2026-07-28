@@ -17,7 +17,7 @@ import multer from 'multer';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Redis from 'ioredis';
-import createApiKeyAuth, { createMasterKeyAuth } from './middleware/apiKeyAuth.js';
+import createApiKeyAuth, { createMasterKeyAuth, readProvidedKey } from './middleware/apiKeyAuth.js';
 import { createRateLimiter, createRedisStore } from './middleware/rateLimit.js';
 import { createAuthLockout } from './middleware/authLockout.js';
 import requestLogger, { log } from './middleware/logger.js';
@@ -29,6 +29,7 @@ import { checkSorobanRpcHealth } from './sorobanRpc.js';
 import { createRpcPool } from './rpcPool.js';
 import { resolveStellarNetworkConfig } from './config/stellarNetwork.js';
 import { validateBackendEnv } from './config/envValidation.js';
+import { getRateTierLimits, DEFAULT_RATE_TIER } from './config/rateTiers.js';
 import { createDal } from './dal/index.js';
 import { createJobRunner } from './jobs/jobRunner.js';
 import { WebhookService, WEBHOOK_EVENTS } from './services/webhookService.js';
@@ -37,6 +38,7 @@ import {
   campaignUpdateSchema,
   cursorBodySchema,
   apiKeyCreateSchema,
+  apiKeyRateTierUpdateSchema,
   formatZodErrors,
 } from './schemas.js';
 import { createStorageAdapter } from './storage/index.js';
@@ -587,11 +589,28 @@ export async function createApp(options = {}) {
     log,
   });
 
+  // Per-API-key rate tiers (#924). The limiter runs before auth on every
+  // route (it's the first line of defense against unauthenticated abuse
+  // too), so tier resolution can't rely on req.auth being set yet — it
+  // independently reads the raw key and looks up its tier directly.
+  // Env-configured keys and untiered/unauthenticated traffic fall back to
+  // the global default, matching pre-#924 behavior exactly.
+  function resolveRateLimitForRequest(req) {
+    const provided = readProvidedKey(req);
+    if (!provided) return null;
+
+    const match = apiKeyRepository.validate(provided);
+    if (!match) return null;
+
+    return getRateTierLimits(match.rateTier ?? DEFAULT_RATE_TIER);
+  }
+
   const rateLimiter = createRateLimiter({
     windowMs: rateLimitWindowMs,
     maxRequests: rateLimitMaxRequests,
     timeProvider: /** @type {any} */ (options.rateLimit)?.timeProvider,
     store: rateLimitStore,
+    resolveLimits: resolveRateLimitForRequest,
   });
 
   app.use(requestId);
@@ -1858,6 +1877,7 @@ export async function createApp(options = {}) {
       expiresAt: result.data.expiresAt ?? null,
       orgId: result.data.orgId ?? null,
       scopes: result.data.scopes ?? undefined,
+      rateTier: result.data.rateTier ?? undefined,
     });
 
     recordAuditEntry(req, {
@@ -1917,6 +1937,34 @@ export async function createApp(options = {}) {
       key: rotated.rawKey,
       metadata: rotated.key,
     });
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function updateApiKeyRateTierHandler(req, res) {
+    const before = apiKeyRepository.getById(req.params.id);
+    if (!before) {
+      return res.status(404).json({ error: 'API key not found', code: 'API_KEY_NOT_FOUND' });
+    }
+
+    const result = apiKeyRateTierUpdateSchema.safeParse(req.body ?? {});
+    if (!result.success) {
+      return res.status(400).json({
+        error: 'Invalid rate tier payload',
+        code: 'VALIDATION_ERROR',
+        details: formatZodErrors(result.error),
+      });
+    }
+
+    const updated = apiKeyRepository.setRateTier(req.params.id, result.data.rateTier);
+
+    recordAuditEntry(req, {
+      action: 'update',
+      entity: 'apiKey',
+      entityId: req.params.id,
+      diff: { before: { rateTier: before.rateTier }, after: { rateTier: updated.rateTier } },
+    });
+
+    return res.status(200).json({ metadata: updated });
   }
 
   /** @param {import('express').Request} req @param {import('express').Response} res */
@@ -2190,6 +2238,13 @@ export async function createApp(options = {}) {
       idempotencyMiddleware,
       requireMasterKey,
       rotateApiKeyHandler,
+    );
+    app.put(
+      `${prefix}/admin/api-keys/:id/rate-tier`,
+      rateLimiter,
+      idempotencyMiddleware,
+      requireMasterKey,
+      updateApiKeyRateTierHandler,
     );
 
     // Admin dashboard and campaign management (Issue #467)
@@ -2613,7 +2668,7 @@ export async function createApp(options = {}) {
       `${prefix}/campaigns/:id/allowlist/import`,
       rateLimiter,
       ...guard,
-      requireScope('campaigns:write'),
+      requireScope('allowlist:write'),
       csvUpload.single('file'),
       async (req, res) => {
         const campaign = campaignRepository.getById(req.params.id);
