@@ -81,6 +81,10 @@ import { createExportJob } from './jobs/exportJob.js';
 import { createEventIndexer } from './jobs/eventIndexer.js';
 import { createSqliteJobQueueRepository } from './dal/sqliteJobQueueRepository.js';
 import { createDurableJobQueue } from './jobs/durableJobQueue.js';
+import {
+  createClaimableBalancesJobHandler,
+  CLAIMABLE_BALANCES_JOB_TYPE,
+} from './jobs/claimableBalancesJobHandler.js';
 import { createStellarTomlRoute } from './routes/stellarToml.js';
 import { createSponsoredAccountRoutes } from './routes/sponsoredAccounts.js';
 import { createClaimableBalancesRoutes } from './routes/claimableBalances.js';
@@ -751,7 +755,16 @@ export async function createApp(options = {}) {
   // Durable job queue — starts poll loop and recovers stale jobs from prior crashes (#565)
   const durableJobQueue = createDurableJobQueue({
     store: jobQueueStore,
-    handlers: {},
+    handlers: {
+      // #922 — end-of-campaign claimable balance creation, enqueued from
+      // POST /campaigns/:id/claimable-balances instead of running inline.
+      [CLAIMABLE_BALANCES_JOB_TYPE]: createClaimableBalancesJobHandler({
+        dal,
+        stellarConfig,
+        env: process.env,
+        log,
+      }),
+    },
     logger: log,
     deadLetter: failedJobRepository,
   });
@@ -2659,10 +2672,13 @@ export async function createApp(options = {}) {
     app.use(`${prefix}/sponsored-accounts`, rateLimiter, ...guard, sponsoredAccountRouter);
 
     // #548 — Claimable balances for unclaimed/expired rewards
+    // #922 — submission runs via durableJobQueue; idempotencyMiddleware
+    // guards the POST route against duplicate enqueues on request retry.
     const claimableBalancesRouter = createClaimableBalancesRoutes({
       dal,
       campaignRepository,
-      stellarConfig,
+      jobQueue: durableJobQueue,
+      idempotencyMiddleware,
       env: process.env,
       logger: log,
     });

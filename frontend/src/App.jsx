@@ -32,8 +32,10 @@ import {
   normalizeError,
 } from './stellar';
 import { logSafeEvent } from './lib/safeAnalytics';
+import { useToast } from './lib/toast/ToastProvider';
 
 export default function App() {
+  const toast = useToast();
   const [theme, setTheme] = useState(() => getPreferredTheme());
   const [runtimeConfig, setRuntimeConfig] = useState(() => getRuntimeConfig());
   const [walletAddress, setWalletAddress] = useState('');
@@ -122,6 +124,7 @@ export default function App() {
       const { address } = await connectWalletProvider(providerName);
       setWalletAddress(address);
       logSafeEvent('wallet_connected', { provider: providerName });
+      toast.success('Wallet connected');
       await loadWalletBalance(address);
     } catch (error) {
       setWalletAddress('');
@@ -129,6 +132,7 @@ export default function App() {
       const msg = normalizeError(error);
       setWalletError(msg);
       setShowWalletModal(true);
+      toast.error(msg);
     } finally {
       setIsWalletLoading(false);
     }
@@ -140,6 +144,7 @@ export default function App() {
     setWalletBalance('');
     setRewardsPoints('');
     setWalletError('');
+    toast.info('Wallet disconnected');
   };
 
   const handleChangeStellarNetwork = async (nextNetwork) => {

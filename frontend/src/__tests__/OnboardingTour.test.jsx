@@ -77,4 +77,48 @@ describe('OnboardingTour', () => {
     render(<OnboardingTour onRestart={restartRef} />);
     expect(typeof restartRef.current).toBe('function');
   });
+
+  it('uses a custom storageKey independently of the default tour completion flag', () => {
+    localStorage.setItem(TOUR_KEY, 'true');
+    render(<OnboardingTour storageKey="trivela:tour_completed_explore" />);
+    vi.advanceTimersByTime(600);
+    // The default tour is marked complete, but this instance uses its own key,
+    // so it should still auto-start.
+    expect(mockDrive).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start when its own custom storageKey is already completed', () => {
+    localStorage.setItem('trivela:tour_completed_explore', 'true');
+    render(<OnboardingTour storageKey="trivela:tour_completed_explore" />);
+    vi.advanceTimersByTime(1000);
+    expect(mockDrive).not.toHaveBeenCalled();
+  });
+
+  it('passes custom steps through to driver.js', () => {
+    const customSteps = [{ popover: { title: 'Explore step' } }];
+    render(<OnboardingTour storageKey="trivela:tour_completed_explore" steps={customSteps} />);
+    vi.advanceTimersByTime(600);
+
+    expect(driver).toHaveBeenCalledWith(expect.objectContaining({ steps: customSteps }));
+  });
+
+  it('writes completion under the custom storageKey', () => {
+    let onDestroyedCallback;
+    driver.mockImplementation((config) => {
+      onDestroyedCallback = config.onDestroyed;
+      return {
+        drive: mockDrive,
+        destroy: mockDestroy,
+        moveNext: mockMoveNext,
+        movePrevious: mockMovePrevious,
+      };
+    });
+
+    render(<OnboardingTour storageKey="trivela:tour_completed_explore" />);
+    vi.advanceTimersByTime(600);
+    onDestroyedCallback?.();
+
+    expect(localStorage.getItem('trivela:tour_completed_explore')).toBe('true');
+    expect(localStorage.getItem(TOUR_KEY)).toBeNull();
+  });
 });

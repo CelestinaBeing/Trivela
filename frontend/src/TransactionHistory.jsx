@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from './components/Header';
+import EmptyState from './components/EmptyState';
 import {
   getHorizonUrl,
   getCampaignContractId,
@@ -203,7 +204,11 @@ export default function TransactionHistory({
           )}
 
           {walletAddress && !loading && !error && items.length === 0 && (
-            <p role="status">No Trivela transactions found for this wallet yet.</p>
+            <EmptyState
+              eyebrow="Transaction history"
+              title="No transactions yet"
+              description="Register for a campaign or claim rewards to see your Trivela on-chain activity here."
+            />
           )}
 
           {walletAddress && !loading && !error && items.length > 0 && (

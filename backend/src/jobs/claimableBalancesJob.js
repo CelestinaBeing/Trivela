@@ -97,7 +97,7 @@ export async function createClaimableBalancesForCampaign({
   const unclaimedUsers = getUnclaimedUsers(db, campaignId);
   if (unclaimedUsers.length === 0) {
     logger.info?.(`[claimableBalances] campaign=${campaignId} no unclaimed users`);
-    return { created: 0, skipped: 0 };
+    return { created: 0, skipped: 0, failed: 0 };
   }
 
   const graceEnd = graceEndDate(campaignEndDate, graceDays);
@@ -105,6 +105,7 @@ export async function createClaimableBalancesForCampaign({
 
   let created = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const { user, unclaimed } of unclaimedUsers) {
     // Idempotency: skip if a balance row already exists for this user+campaign
@@ -182,10 +183,12 @@ export async function createClaimableBalancesForCampaign({
       db.prepare(
         "UPDATE claimable_balances SET status = 'failed', error_message = ?, updated_at = ? WHERE id = ?",
       ).run(err.message.slice(0, 500), new Date().toISOString(), id);
-      skipped++;
+      failed++;
     }
   }
 
-  logger.info?.(`[claimableBalances] campaign=${campaignId} created=${created} skipped=${skipped}`);
-  return { created, skipped };
+  logger.info?.(
+    `[claimableBalances] campaign=${campaignId} created=${created} skipped=${skipped} failed=${failed}`,
+  );
+  return { created, skipped, failed };
 }
