@@ -32,6 +32,7 @@ export default function CampaignDetail({
 
   const [referralCount, setReferralCount] = useState(0);
   const [bonusEarned, setBonusEarned] = useState(0);
+  const [referralTier, setReferralTier] = useState(null);
   const [refLinkCopied, setRefLinkCopied] = useState(false);
   const [embedSnippetCopied, setEmbedSnippetCopied] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
@@ -78,6 +79,12 @@ export default function CampaignDetail({
         if (data) {
           setReferralCount(data.referralCount ?? 0);
           setBonusEarned(data.bonusEarned ?? 0);
+          setReferralTier({
+            tier: data.tier,
+            nextTier: data.nextTier,
+            referralsToNextTier: data.referralsToNextTier,
+            tierProgressPercent: data.tierProgressPercent,
+          });
         }
       })
       .catch(() => {});
@@ -347,7 +354,28 @@ export default function CampaignDetail({
                           <span className="referral-stat-label">bonus pts earned</span>
                         </div>
                       ) : null}
+                      {referralTier?.tier ? (
+                        <div className="referral-stat referral-tier-stat">
+                          <span
+                            className={`referral-tier-badge referral-tier-${referralTier.tier.id}`}
+                          >
+                            {referralTier.tier.name}
+                          </span>
+                          <span className="referral-stat-label">
+                            {referralTier.nextTier
+                              ? `${referralTier.referralsToNextTier} more to ${referralTier.nextTier.name}`
+                              : 'Top tier reached'}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
+
+                    <Link
+                      to={`/campaign/${id}/referrals/leaderboard`}
+                      className="referral-leaderboard-link"
+                    >
+                      View referral leaderboard →
+                    </Link>
 
                     <div className="referral-link-row">
                       <input

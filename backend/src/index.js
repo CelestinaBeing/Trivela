@@ -53,7 +53,8 @@ import { generateAllowlist } from './lib/allowlist/merkle.js';
 import { parseAllowlistCsv, validateGAddress, MAX_ALLOWLIST_ROWS } from './lib/allowlist/csv.js';
 import { createEmbedRoute } from './routes/embed.js';
 import { createTemplateRoutes } from './routes/templates.js';
-import { createSseRoutes } from './routes/sse.js';
+import { createSseRoutes, broadcastCampaignEvent } from './routes/sse.js';
+import { getReferralTierProgress } from './services/referralTiers.js';
 import { createEmbedWidgetRoute } from './routes/embedWidget.js';
 import { createDevPortalRoutes } from './routes/devPortal.js';
 import { createVariantRoutes } from './routes/variants.js';
@@ -2472,7 +2473,91 @@ export async function createApp(options = {}) {
         });
       }
 
+      // Live-update anyone watching this campaign's referral leaderboard stream.
+      broadcastCampaignEvent(`${req.params.id}:leaderboard`, 'referral', {
+        campaignId: String(campaign.id),
+        referrerAddress: referral.referrerAddress,
+        timestamp: referral.createdAt,
+      });
+
       return res.status(201).json(referral);
+    });
+
+    // Referral leaderboard — top referrers for a campaign, with tiered perk
+    // progress and tie-safe ranking (Growth & Community epic).
+    //
+    // Registered ahead of the /:walletAddress route below: Express matches
+    // routes in registration order, and "leaderboard" would otherwise be
+    // captured as a wallet address by the more general param route.
+    app.get(`${prefix}/campaigns/:id/referrals/leaderboard`, rateLimiter, (req, res) => {
+      const campaign = campaignRepository.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found', code: 'CAMPAIGN_NOT_FOUND' });
+      }
+
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const offset = (page - 1) * limit;
+
+      const { rows, total } = referralRepository.getLeaderboard(req.params.id, {
+        limit,
+        offset,
+      });
+
+      const data = rows.map((row) => {
+        const { tier, nextTier, referralsToNextTier, progressPercent } = getReferralTierProgress(
+          row.referralCount,
+        );
+        return {
+          rank: row.rank,
+          walletAddress: row.referrerAddress,
+          referralCount: row.referralCount,
+          tier,
+          nextTier,
+          referralsToNextTier,
+          tierProgressPercent: progressPercent,
+        };
+      });
+
+      return res.json({
+        data,
+        pagination: {
+          page,
+          limit,
+          total,
+          hasNextPage: offset + rows.length < total,
+        },
+      });
+    });
+
+    app.get(`${prefix}/campaigns/:id/referrals/leaderboard/rank`, rateLimiter, (req, res) => {
+      const campaign = campaignRepository.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found', code: 'CAMPAIGN_NOT_FOUND' });
+      }
+
+      const walletAddress = String(req.query.wallet ?? '').trim();
+      if (!walletAddress) {
+        return res
+          .status(400)
+          .json({ error: 'wallet query parameter is required', code: 'VALIDATION_ERROR' });
+      }
+
+      const ranked = referralRepository.getReferrerRank(req.params.id, walletAddress);
+      const referralCount = ranked?.referralCount ?? 0;
+      const { tier, nextTier, referralsToNextTier, progressPercent } =
+        getReferralTierProgress(referralCount);
+
+      return res.json({
+        walletAddress,
+        campaignId: String(campaign.id),
+        rank: ranked?.rank ?? null,
+        referralCount,
+        tier,
+        nextTier,
+        referralsToNextTier,
+        tierProgressPercent: progressPercent,
+      });
     });
 
     app.get(`${prefix}/campaigns/:id/referrals/:walletAddress`, rateLimiter, (req, res) => {
@@ -2484,6 +2569,8 @@ export async function createApp(options = {}) {
       const walletAddress = req.params.walletAddress.trim();
       const referralCount = referralRepository.countByReferrer(req.params.id, walletAddress);
       const bonusEarned = referralCount * (campaign.referralBonusPoints ?? 0);
+      const { tier, nextTier, referralsToNextTier, progressPercent } =
+        getReferralTierProgress(referralCount);
 
       return res.json({
         walletAddress,
@@ -2491,6 +2578,10 @@ export async function createApp(options = {}) {
         referralCount,
         referralBonusPoints: campaign.referralBonusPoints ?? 0,
         bonusEarned,
+        tier,
+        nextTier,
+        referralsToNextTier,
+        tierProgressPercent: progressPercent,
       });
     });
 

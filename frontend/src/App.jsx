@@ -13,6 +13,7 @@ import RequireAdmin from './components/RequireAdmin';
 const Explore = lazy(() => import('./Explore'));
 const CampaignDetail = lazy(() => import('./CampaignDetail'));
 const CampaignLeaderboard = lazy(() => import('./CampaignLeaderboard'));
+const ReferralLeaderboard = lazy(() => import('./ReferralLeaderboard'));
 const CampaignAnalytics = lazy(() => import('./CampaignAnalytics'));
 const AdminCampaigns = lazy(() => import('./AdminCampaigns'));
 const About = lazy(() => import('./About'));
@@ -252,6 +253,23 @@ export default function App() {
                 onConnectWallet={openWalletModal}
                 onDisconnectWallet={disconnectWallet}
                 onRefreshPoints={() => loadWalletBalance(walletAddress)}
+              />
+            }
+          />
+          <Route
+            path="/campaign/:id/referrals/leaderboard"
+            element={
+              <ReferralLeaderboard
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                stellarNetwork={runtimeConfig.stellar.network}
+                onChangeStellarNetwork={handleChangeStellarNetwork}
+                walletAddress={walletAddress}
+                walletBalance={walletBalance}
+                isWalletLoading={isWalletLoading}
+                isWalletBalanceLoading={isWalletBalanceLoading}
+                onConnectWallet={openWalletModal}
+                onDisconnectWallet={disconnectWallet}
               />
             }
           />
