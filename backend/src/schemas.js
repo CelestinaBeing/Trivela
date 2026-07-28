@@ -1,6 +1,7 @@
 // @ts-check
 import { z } from 'zod';
 import { DEFAULT_CATEGORIES } from './dal/sqliteCampaignRepository.js';
+import { VALID_RATE_TIERS } from './config/rateTiers.js';
 
 const isoDateOrNull = z
   .string()
@@ -157,6 +158,12 @@ export const apiKeyCreateSchema = z.object({
     .array(z.enum(VALID_API_KEY_SCOPES))
     .min(1, 'scopes must contain at least one scope')
     .optional(),
+  rateTier: z.enum(VALID_RATE_TIERS).optional(),
+});
+
+/** Schema for updating an existing API key's rate tier. */
+export const apiKeyRateTierUpdateSchema = z.object({
+  rateTier: z.enum(VALID_RATE_TIERS),
 });
 
 /** Schema for the indexer cursor update body. */
