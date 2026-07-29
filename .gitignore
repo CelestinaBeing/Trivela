@@ -28,3 +28,4 @@ Thumbs.db
 # Playwright
 **/playwright-report-visual/
 **/test-results/
+backend/build/
