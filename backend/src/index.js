@@ -102,6 +102,7 @@ import {
 } from './routes/notifications.js';
 import { createOperatorBalanceJob } from './jobs/operatorBalanceJob.js';
 import { createPruningJob } from './jobs/pruningJob.js';
+import { purgePiiForUser, purgePiiForCampaign } from './services/piiPurgeService.js';
 import { createModerationService } from './moderation/moderationService.js';
 import { createContentModerationMiddleware } from './middleware/contentModeration.js';
 import createFaucetRoutes from './routes/faucet.js';
@@ -1541,6 +1542,101 @@ export async function createApp(options = {}) {
   }
 
   /** @param {import('express').Request} req @param {import('express').Response} res */
+  function restoreCampaign(req, res) {
+    const restored = campaignRepository.restore(req.params.id);
+    if (!restored) {
+      return res.status(404).json({ error: 'Campaign not found or not deleted', code: 'CAMPAIGN_NOT_FOUND' });
+    }
+    recordAuditEntry(req, {
+      action: 'restore',
+      entity: 'campaign',
+      entityId: req.params.id,
+      diff: { restored: true },
+    });
+
+    webhookService
+      .dispatchEvent({
+        type: WEBHOOK_EVENTS.CAMPAIGN_RESTORED,
+        campaignId: req.params.id,
+        data: restored,
+        timestamp: new Date().toISOString(),
+      })
+      .catch((err) => {
+        log.warn(
+          { err, campaignId: req.params.id },
+          'Failed to dispatch campaign.restored webhook',
+        );
+      });
+
+    shortCache.clear();
+    return res.json(serializeCampaign(restored));
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function purgeCampaign(req, res) {
+    const purged = campaignRepository.hardDelete(req.params.id);
+    if (!purged) {
+      return res.status(404).json({ error: 'Campaign not found', code: 'CAMPAIGN_NOT_FOUND' });
+    }
+    recordAuditEntry(req, {
+      action: 'purge',
+      entity: 'campaign',
+      entityId: req.params.id,
+      diff: { purged: true },
+    });
+    shortCache.clear();
+    return res.status(204).end();
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function listDeletedCampaigns(req, res) {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+    const olderThanDays = req.query.olderThanDays ? parseInt(req.query.olderThanDays, 10) : undefined;
+    const campaigns = campaignRepository.listDeleted({ limit, olderThanDays });
+    return res.json({ campaigns, total: campaigns.length });
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function purgePiiUser(req, res) {
+    const { identifier } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({ error: 'identifier is required', code: 'VALIDATION_ERROR' });
+    }
+    const dal = campaignRepository.db ? { db: campaignRepository.db } : null;
+    if (!dal || !dal.db) {
+      return res.status(500).json({ error: 'Database not available', code: 'DB_UNAVAILABLE' });
+    }
+    const result = purgePiiForUser(dal.db, identifier);
+    recordAuditEntry(req, {
+      action: 'pii_purge',
+      entity: 'user',
+      entityId: identifier,
+      diff: result,
+    });
+    return res.json({ success: true, ...result });
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function purgePiiCampaign(req, res) {
+    const { campaignId } = req.body;
+    if (!campaignId) {
+      return res.status(400).json({ error: 'campaignId is required', code: 'VALIDATION_ERROR' });
+    }
+    const dal = campaignRepository.db ? { db: campaignRepository.db } : null;
+    if (!dal || !dal.db) {
+      return res.status(500).json({ error: 'Database not available', code: 'DB_UNAVAILABLE' });
+    }
+    const result = purgePiiForCampaign(dal.db, campaignId);
+    recordAuditEntry(req, {
+      action: 'pii_purge',
+      entity: 'campaign',
+      entityId: String(campaignId),
+      diff: result,
+    });
+    return res.json({ success: true, ...result });
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
   function cloneCampaign(req, res) {
     const sourceId = req.params.id;
     const source = campaignRepository.getById(sourceId);
@@ -2132,6 +2228,77 @@ export async function createApp(options = {}) {
       archiveCampaign,
     );
     app.delete(`${prefix}/campaigns/:id`, rateLimiter, ...guard, deleteCampaign);
+
+    // Soft-delete management routes
+    app.post(
+      `${prefix}/campaigns/:id/restore`,
+      rateLimiter,
+      idempotencyMiddleware,
+      requireApiKey,
+      restoreCampaign,
+    );
+    app.post(
+      `${prefix}/campaigns/:id/restore`,
+      rateLimiter,
+      idempotencyMiddleware,
+      ...guard,
+      requireScope('campaigns:write'),
+      restoreCampaign,
+    );
+    app.delete(
+      `${prefix}/campaigns/:id/purge`,
+      rateLimiter,
+      requireApiKey,
+      purgeCampaign,
+    );
+    app.delete(
+      `${prefix}/campaigns/:id/purge`,
+      rateLimiter,
+      ...guard,
+      requireScope('campaigns:write'),
+      purgeCampaign,
+    );
+    app.get(
+      `${prefix}/campaigns/deleted`,
+      rateLimiter,
+      requireApiKey,
+      listDeletedCampaigns,
+    );
+    app.get(
+      `${prefix}/campaigns/deleted`,
+      rateLimiter,
+      ...guard,
+      requireScope('campaigns:read'),
+      listDeletedCampaigns,
+    );
+
+    // PII purge routes (admin only)
+    app.post(
+      `${prefix}/pii/purge-user`,
+      rateLimiter,
+      requireApiKey,
+      purgePiiUser,
+    );
+    app.post(
+      `${prefix}/pii/purge-user`,
+      rateLimiter,
+      ...guard,
+      requireScope('org:manage'),
+      purgePiiUser,
+    );
+    app.post(
+      `${prefix}/pii/purge-campaign`,
+      rateLimiter,
+      requireApiKey,
+      purgePiiCampaign,
+    );
+    app.post(
+      `${prefix}/pii/purge-campaign`,
+      rateLimiter,
+      ...guard,
+      requireScope('org:manage'),
+      purgePiiCampaign,
+    );
 
     // Campaign translations (i18n)
     app.get(`${prefix}/campaigns/:id/translations`, rateLimiter, ...guard, (req, res) => {
