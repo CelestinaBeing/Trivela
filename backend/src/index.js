@@ -111,6 +111,9 @@ import { createContentModerationMiddleware } from './middleware/contentModeratio
 import createFaucetRoutes from './routes/faucet.js';
 import createStatusRoutes from './routes/status.js';
 import createWebhookRoutes from './routes/webhooks.js';
+import swaggerUi from 'swagger-ui-express';
+import { readFileSync } from 'node:fs';
+import { load as yamlLoad } from 'js-yaml';
 
 const DEFAULT_PORT = 3001;
 
@@ -957,6 +960,23 @@ export async function createApp(options = {}) {
       openApiPath: join(process.cwd(), 'backend', 'openapi.yaml'),
     }),
   );
+
+  // Interactive API docs (#882) — Swagger UI served at /docs
+  // The dev-portal HTML embeds this in an iframe; also linkable directly.
+  (() => {
+    const openApiPath = join(process.cwd(), 'backend', 'openapi.yaml');
+    let swaggerSpec;
+    try {
+      swaggerSpec = yamlLoad(readFileSync(openApiPath, 'utf8'));
+    } catch {
+      swaggerSpec = { openapi: '3.0.0', info: { title: 'Trivela API', version: '0.0.0' }, paths: {} };
+    }
+    app.use('/docs', swaggerUi.serve);
+    app.get('/docs', swaggerUi.setup(swaggerSpec, {
+      customSiteTitle: 'Trivela API Reference',
+      swaggerOptions: { persistAuthorization: true },
+    }));
+  })();
 
   app.get('/health/rpc', async (_req, res) => {
     const rpcUrl = rpcPool.getHealthyRpcUrl();
