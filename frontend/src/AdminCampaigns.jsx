@@ -113,7 +113,11 @@ export default function AdminCampaigns({
                   </li>
                 ))}
               </ul>
-              <Link to="/admin/analytics" className="btn btn-primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
+              <Link
+                to="/admin/analytics"
+                className="btn btn-primary"
+                style={{ marginTop: '1rem', display: 'inline-block' }}
+              >
                 Operator Analytics Dashboard
               </Link>
             </section>
@@ -174,7 +178,8 @@ export default function AdminCampaigns({
             <div className="admin-control-header">
               <h3 className="section-title">Rewards Contract Management</h3>
               <p className="section-subtitle">
-                Manage rewards contract settings including pause controls, rate limits, reserves, and multisig.
+                Manage rewards contract settings including pause controls, rate limits, reserves,
+                and multisig.
               </p>
             </div>
             <ErrorBoundary as="div">

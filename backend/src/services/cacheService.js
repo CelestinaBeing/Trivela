@@ -140,7 +140,9 @@ export class CacheService {
         if (keys.length > 0) {
           await this.redisClient.del(...keys);
         }
-      } catch {}
+      } catch {
+        // Best-effort: a stale cache entry is not worse than throwing here.
+      }
     }
   }
 }

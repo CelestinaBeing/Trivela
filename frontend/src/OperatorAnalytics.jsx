@@ -95,10 +95,7 @@ export default function OperatorAnalytics({
       const funnelUrl = apiUrl(`/api/v1/analytics/funnel${params ? `?${params}` : ''}`);
       const retentionUrl = apiUrl(`/api/v1/analytics/retention${params ? `?${params}` : ''}`);
 
-      const [funnelRes, retentionRes] = await Promise.all([
-        fetch(funnelUrl),
-        fetch(retentionUrl),
-      ]);
+      const [funnelRes, retentionRes] = await Promise.all([fetch(funnelUrl), fetch(retentionUrl)]);
 
       if (!funnelRes.ok) throw new Error(`Funnel API returned ${funnelRes.status}`);
       if (!retentionRes.ok) throw new Error(`Retention API returned ${retentionRes.status}`);
@@ -272,10 +269,7 @@ export default function OperatorAnalytics({
                   <ResponsiveContainer width="100%" height={320}>
                     <BarChart data={funnelChartData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis
-                        type="number"
-                        tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                      />
+                      <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
                       <YAxis
                         type="category"
                         dataKey="name"
@@ -340,10 +334,7 @@ export default function OperatorAnalytics({
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={retentionChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis
-                      dataKey="period"
-                      tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
-                    />
+                    <XAxis dataKey="period" tick={{ fill: 'var(--text-muted)', fontSize: 12 }} />
                     <YAxis
                       tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
                       domain={[0, 100]}

@@ -424,10 +424,7 @@ export default function App() {
               />
             }
           />
-          <Route
-            path="/proof-of-reserves"
-            element={<ProofOfReserves theme={theme} />}
-          />
+          <Route path="/proof-of-reserves" element={<ProofOfReserves theme={theme} />} />
           <Route path="/embed/campaign/:id" element={<EmbedCampaign />} />
           <Route path="/u/:address" element={<PublicProfile />} />
           <Route

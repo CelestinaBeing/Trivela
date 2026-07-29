@@ -517,7 +517,6 @@ export function createEventIndexer({
     return nextCursor;
   }
 
-  return { processEvent, poll, pollWithCursor };
   async function checkForGaps(contractId, currentLedger) {
     const lastState = await sql.get('SELECT last_ledger FROM indexer_state WHERE contract_id = ?', [
       contractId,
