@@ -34,6 +34,7 @@ import { getRateTierLimits, DEFAULT_RATE_TIER } from './config/rateTiers.js';
 import { createDal } from './dal/index.js';
 import { createJobRunner } from './jobs/jobRunner.js';
 import { WebhookService, WEBHOOK_EVENTS } from './services/webhookService.js';
+import { createSanctionsService } from './services/sanctionsService.js';
 import {
   campaignCreateSchema,
   campaignUpdateSchema,
@@ -110,6 +111,9 @@ import { createContentModerationMiddleware } from './middleware/contentModeratio
 import createFaucetRoutes from './routes/faucet.js';
 import createStatusRoutes from './routes/status.js';
 import createWebhookRoutes from './routes/webhooks.js';
+import swaggerUi from 'swagger-ui-express';
+import { readFileSync } from 'node:fs';
+import { load as yamlLoad } from 'js-yaml';
 
 const DEFAULT_PORT = 3001;
 
@@ -397,6 +401,11 @@ export async function createApp(options = {}) {
     notificationPreferencesRepo: notificationPreferencesRepository,
     webPushService,
   });
+
+  // Sanctions/blocklist screening for payout addresses — closes #955.
+  // Provider is configurable via SANCTIONS_PROVIDER env var (default: "local").
+  // Add blocked addresses via SANCTIONS_BLOCKLIST (comma-separated Stellar addresses).
+  const sanctionsService = createSanctionsService({ logger: log });
   const shortCacheTtlMs = normalizePositiveInteger(
     /** @type {any} */ (options.shortCacheTtlMs) ?? process.env.SHORT_CACHE_TTL_MS,
     DEFAULT_SHORT_CACHE_TTL_MS,
@@ -845,12 +854,29 @@ export async function createApp(options = {}) {
     const rpcUrl = rpcPool.getHealthyRpcUrl();
     const rpc = rpcHealthCache.payload ?? (await checkSorobanRpcHealth({ rpcUrl, fetchImpl }));
 
+    // Redis health — closes #858: surface Redis connectivity in /health so
+    // operators can detect a Redis outage before rate-limit correctness degrades.
+    let redisHealth = { status: 'disabled' };
+    if (usageRedisClient) {
+      try {
+        const pong = await usageRedisClient.ping();
+        redisHealth = { status: pong === 'PONG' ? 'ok' : 'degraded' };
+      } catch {
+        redisHealth = { status: 'error' };
+      }
+    }
+
+    const isOk =
+      /** @type {any} */ (rpc).status === 'ok' &&
+      (redisHealth.status === 'ok' || redisHealth.status === 'disabled');
+
     return {
-      status: /** @type {any} */ (rpc).status === 'ok' ? 'ok' : 'degraded',
+      status: isOk ? 'ok' : 'degraded',
       service: 'trivela-api',
       timestamp: new Date().toISOString(),
       rpc,
       rpcPool: rpcPool.getStatus(),
+      redis: redisHealth,
     };
   }
 
@@ -934,6 +960,23 @@ export async function createApp(options = {}) {
       openApiPath: join(process.cwd(), 'backend', 'openapi.yaml'),
     }),
   );
+
+  // Interactive API docs (#882) — Swagger UI served at /docs
+  // The dev-portal HTML embeds this in an iframe; also linkable directly.
+  (() => {
+    const openApiPath = join(process.cwd(), 'backend', 'openapi.yaml');
+    let swaggerSpec;
+    try {
+      swaggerSpec = yamlLoad(readFileSync(openApiPath, 'utf8'));
+    } catch {
+      swaggerSpec = { openapi: '3.0.0', info: { title: 'Trivela API', version: '0.0.0' }, paths: {} };
+    }
+    app.use('/docs', swaggerUi.serve);
+    app.get('/docs', swaggerUi.setup(swaggerSpec, {
+      customSiteTitle: 'Trivela API Reference',
+      swaggerOptions: { persistAuthorization: true },
+    }));
+  })();
 
   app.get('/health/rpc', async (_req, res) => {
     const rpcUrl = rpcPool.getHealthyRpcUrl();
@@ -2716,6 +2759,36 @@ export async function createApp(options = {}) {
         return res.json({ valid });
       } catch {
         return res.json({ valid: false });
+      }
+    });
+
+    // Sanctions screening — closes #955
+    // POST /api/v1/sanctions/screen  { address: string }
+    // Screen a Stellar address against the configured blocklist before settlement.
+    // Returns { blocked: boolean, reason?: string, provider: string }.
+    // Blocked addresses are also written to the audit log.
+    app.post(`${prefix}/sanctions/screen`, rateLimiter, async (req, res) => {
+      const address = req.body?.address;
+      if (typeof address !== 'string' || !address.trim()) {
+        return res.status(400).json({
+          error: 'address is required',
+          code: 'VALIDATION_ERROR',
+        });
+      }
+      try {
+        const result = await sanctionsService.screen(address.trim(), { logger: log });
+        if (result.blocked) {
+          recordAuditEntry(req, {
+            action: 'block',
+            entity: 'sanctions',
+            entityId: address.trim(),
+            diff: { reason: result.reason, provider: result.provider },
+          });
+        }
+        return res.status(result.blocked ? 403 : 200).json(result);
+      } catch (err) {
+        log.error({ err }, 'sanctions: screen error');
+        return res.status(500).json({ error: 'Sanctions check failed', code: 'INTERNAL_ERROR' });
       }
     });
 

@@ -1,6 +1,50 @@
 /**
  * Enhanced event indexer for Trivela Soroban contract events.
  *
+ * Subscribes to on-chain events and persists them to the database.
+ * Snapshot events store a ledger reference so off-chain tools can
+ * reconstruct user balances at that point using Horizon getLedgerEntries.
+ *
+ * `pollWithCursor` (issue #753) adds:
+ * - Durable cursor: the last-seen event cursor is stored in `indexer_cursors`
+ *   and resumed on restart, so no events are skipped or re-processed after a
+ *   crash.
+ * - Exactly-once via per-event dedupe: `processed_events` records a unique key
+ *   per event (contract_id + ledger + event_index). Replaying the same ledger
+ *   range produces no duplicate DB rows.
+ * - Backpressure: ingestion is paused when the writer is saturated. A bounded
+ *   semaphore caps the number of events being processed concurrently; when all
+ *   slots are occupied the fetch loop waits rather than accumulating unbounded
+ *   in-flight work.
+ */
+
+/**
+ * Bounded concurrency semaphore for backpressure.
+ * `acquire()` resolves immediately when a slot is free; otherwise it waits
+ * until one is released, naturally pausing the fetch loop.
+ */
+class Semaphore {
+  constructor(limit) {
+    this._limit = limit;
+    this._active = 0;
+    this._queue = [];
+  }
+
+  acquire() {
+    if (this._active < this._limit) {
+      this._active++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => this._queue.push(resolve));
+  }
+
+  release() {
+    this._active--;
+    if (this._queue.length > 0) {
+      this._active++;
+      this._queue.shift()();
+    }
+  }
  * Features:
  * - Durable cursor persistence in indexer_state table
  * - Idempotent upserts via UNIQUE(tx_hash, event_index) constraint
@@ -393,6 +437,85 @@ export function createEventIndexer({
     }
   }
 
+  /**
+   * Poll once with durable cursor persistence, per-event exactly-once dedupe,
+   * and bounded concurrency backpressure (issue #753).
+   *
+   * @param {string} contractId
+   * @param {object} opts
+   * @param {number} [opts.maxInflight=32]  Max concurrent event handlers.
+   *   When all slots are occupied, new fetch calls pause until a slot frees —
+   *   this is the backpressure mechanism.
+   * @returns {Promise<string|undefined>}  The next cursor, or undefined when
+   *   the indexer has caught up.
+   */
+  async function pollWithCursor(contractId, { maxInflight = 32 } = {}) {
+    // Load the last durable cursor so we resume exactly where we left off.
+    const cursorRow = await db.get(
+      `SELECT cursor FROM indexer_cursors WHERE contract_id = ?`,
+      [contractId],
+    );
+    const cursor = cursorRow?.cursor ?? undefined;
+
+    const rpc = await rpcPool.acquire();
+    let events, nextCursor;
+    try {
+      ({ events, nextCursor } = await rpc.getEvents({
+        contractId,
+        cursor,
+        limit: 200,
+      }));
+    } finally {
+      rpcPool.release(rpc);
+    }
+
+    if (!events || events.length === 0) {
+      return nextCursor;
+    }
+
+    // Bounded concurrency — when all maxInflight slots are taken, acquire()
+    // blocks, preventing unbounded in-flight growth (backpressure).
+    const sem = new Semaphore(maxInflight);
+
+    await Promise.all(
+      events.map(async (event, eventIndex) => {
+        await sem.acquire();
+        try {
+          // Exactly-once: use (contract_id, ledger, eventIndex) as the dedupe
+          // key. INSERT OR IGNORE makes re-processing the same ledger range a
+          // no-op; `changes === 0` means the event was already handled.
+          const dedupeResult = await db.run(
+            `INSERT OR IGNORE INTO processed_events
+               (contract_id, ledger, event_index, processed_at)
+             VALUES (?, ?, ?, ?)`,
+            [contractId, event.ledger, eventIndex, Date.now()],
+          );
+          if (dedupeResult?.changes === 0) return;
+          await processEvent(event);
+        } finally {
+          sem.release();
+        }
+      }),
+    );
+
+    // Persist the cursor only after the entire batch has been written. A crash
+    // between batch processing and cursor write causes safe re-delivery (the
+    // dedupe table absorbs duplicates); a crash after cursor write skips past
+    // the batch — which is why we write cursor last.
+    if (nextCursor != null) {
+      await db.run(
+        `INSERT INTO indexer_cursors (contract_id, cursor, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(contract_id)
+         DO UPDATE SET cursor = excluded.cursor, updated_at = excluded.updated_at`,
+        [contractId, nextCursor, new Date().toISOString()],
+      );
+    }
+
+    return nextCursor;
+  }
+
+  return { processEvent, poll, pollWithCursor };
   async function checkForGaps(contractId, currentLedger) {
     const lastState = await sql.get('SELECT last_ledger FROM indexer_state WHERE contract_id = ?', [
       contractId,

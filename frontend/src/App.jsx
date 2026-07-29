@@ -20,6 +20,7 @@ const OperatorAnalytics = lazy(() => import('./OperatorAnalytics'));
 const AdminCampaigns = lazy(() => import('./AdminCampaigns'));
 const About = lazy(() => import('./About'));
 const TransactionHistory = lazy(() => import('./TransactionHistory'));
+const ProofOfReserves = lazy(() => import('./ProofOfReserves'));
 const EmbedCampaign = lazy(() => import('./pages/EmbedCampaign'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
@@ -422,6 +423,10 @@ export default function App() {
                 onDisconnectWallet={disconnectWallet}
               />
             }
+          />
+          <Route
+            path="/proof-of-reserves"
+            element={<ProofOfReserves theme={theme} />}
           />
           <Route path="/embed/campaign/:id" element={<EmbedCampaign />} />
           <Route path="/u/:address" element={<PublicProfile />} />
