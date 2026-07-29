@@ -70,6 +70,7 @@ import { createOrgRoutes } from './routes/orgs.js';
 import { createAuditRouter } from './routes/audit.js';
 import { createAuditLogService } from './services/auditLogService.js';
 import { createWebPushService } from './services/webPushService.js';
+import { createNotificationService } from './services/notificationService.js';
 import { createOrganizationRoutes } from './routes/organizations.js';
 import { createUsageMeteringService } from './services/usageMeteringService.js';
 import { createFeatureFlagRoutes } from './routes/featureFlags.js';
@@ -390,6 +391,12 @@ export async function createApp(options = {}) {
     },
     logger: log,
   });
+
+  const notificationService = createNotificationService({
+    notificationRepo: dal.notifications,
+    notificationPreferencesRepo: notificationPreferencesRepository,
+    webPushService,
+  });
   const shortCacheTtlMs = normalizePositiveInteger(
     /** @type {any} */ (options.shortCacheTtlMs) ?? process.env.SHORT_CACHE_TTL_MS,
     DEFAULT_SHORT_CACHE_TTL_MS,
@@ -566,6 +573,7 @@ export async function createApp(options = {}) {
         process.env.INDEXER_CONFIRMATION_DEPTH,
       0,
     ),
+    notificationService,
   });
 
   // Durable job queue store — persistent across restarts (#565)

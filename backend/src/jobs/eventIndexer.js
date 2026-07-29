@@ -78,6 +78,7 @@ export function createEventIndexer({
   logger = console,
   referralBonus = 0,
   confirmationDepth = 0,
+  notificationService,
 } = {}) {
   const sql = createSqlAdapter(db);
   const depth = Math.max(0, Math.floor(Number(confirmationDepth)) || 0);
@@ -98,11 +99,11 @@ export function createEventIndexer({
   };
 
   const handlers = {
-    credit: handleCreditEvent,
-    claim: handleClaimEvent,
+    credit: (event, db) => handleCreditEvent(event, db, notificationService),
+    claim: (event, db) => handleClaimEvent(event, db, notificationService),
     snapshot: handleSnapshotEvent,
-    vcredit: handleVestedCreditEvent,
-    vclaim: handleVestedClaimEvent,
+    vcredit: (event, db) => handleVestedCreditEvent(event, db, notificationService),
+    vclaim: (event, db) => handleVestedClaimEvent(event, db, notificationService),
     referred: (event, database) => handleReferredEvent(event, database, referralBonus),
     refbonus: handleRefBonusEvent,
     register: handleRegisterEvent,
@@ -591,7 +592,7 @@ function applyBalanceDelta(db, user, delta) {
   );
 }
 
-async function handleCreditEvent(event, db) {
+async function handleCreditEvent(event, db, notificationService) {
   const user = event.topic?.[1];
   const amount = BigInt(event.data ?? 0);
   await applyBalanceDelta(db, user, amount);
@@ -601,9 +602,20 @@ async function handleCreditEvent(event, db) {
     event.ledger,
     event.txHash,
   ]);
+
+  if (notificationService && user) {
+    const displayAmount = (Number(amount) / 1e7).toFixed(7);
+    await notificationService.notify({
+      userId: user,
+      title: 'Points credited',
+      message: `You received ${displayAmount} points.`,
+      type: 'credit_received',
+      campaignId: event.topic?.[2] ?? null,
+    });
+  }
 }
 
-async function handleClaimEvent(event, db) {
+async function handleClaimEvent(event, db, notificationService) {
   const user = event.topic?.[1];
   const amount = BigInt(event.data ?? 0);
   await applyBalanceDelta(db, user, -amount);
@@ -613,6 +625,17 @@ async function handleClaimEvent(event, db) {
     event.ledger,
     event.txHash,
   ]);
+
+  if (notificationService && user) {
+    const displayAmount = (Number(amount) / 1e7).toFixed(7);
+    await notificationService.notify({
+      userId: user,
+      title: 'Claim confirmed',
+      message: `You claimed ${displayAmount} points.`,
+      type: 'claim_ready',
+      campaignId: event.topic?.[2] ?? null,
+    });
+  }
 }
 
 async function handleSnapshotEvent(event, db) {
@@ -625,7 +648,7 @@ async function handleSnapshotEvent(event, db) {
   );
 }
 
-async function handleVestedCreditEvent(event, db) {
+async function handleVestedCreditEvent(event, db, notificationService) {
   const user = event.topic?.[1];
   const [vestId, total] = Array.isArray(event.data) ? event.data : [0, 0];
   await db.run(
@@ -633,9 +656,20 @@ async function handleVestedCreditEvent(event, db) {
      VALUES (?, ?, ?, ?, ?)`,
     [user, String(vestId), String(total), event.ledger, event.txHash],
   );
+
+  if (notificationService && user) {
+    const displayTotal = (Number(total) / 1e7).toFixed(7);
+    await notificationService.notify({
+      userId: user,
+      title: 'Vesting schedule created',
+      message: `A vesting schedule for ${displayTotal} points has been created.`,
+      type: 'campaign_update',
+      campaignId: event.topic?.[2] ?? null,
+    });
+  }
 }
 
-async function handleVestedClaimEvent(event, db) {
+async function handleVestedClaimEvent(event, db, notificationService) {
   const user = event.topic?.[1];
   const [vestId, amount] = Array.isArray(event.data) ? event.data : [0, 0];
   await db.run(
@@ -643,6 +677,17 @@ async function handleVestedClaimEvent(event, db) {
      VALUES (?, ?, ?, ?, ?)`,
     [user, String(vestId), String(amount), event.ledger, event.txHash],
   );
+
+  if (notificationService && user) {
+    const displayAmount = (Number(amount) / 1e7).toFixed(7);
+    await notificationService.notify({
+      userId: user,
+      title: 'Vesting unlocked',
+      message: `${displayAmount} points have been unlocked from vesting.`,
+      type: 'reward_expiring',
+      campaignId: event.topic?.[2] ?? null,
+    });
+  }
 }
 
 async function handleReferredEvent(event, db, referralBonus = 0) {
