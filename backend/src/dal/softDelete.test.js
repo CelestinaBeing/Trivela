@@ -3,7 +3,7 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../db/migrate.js';
 import { createSqliteCampaignRepository } from './sqliteCampaignRepository.js';
-import { purgePiiForUser, purgePiiForCampaign } from '../services/piiPurgeService.js';
+import { purgePiiForUser, purgePiiForCampaign, exportPiiForUser } from '../services/piiPurgeService.js';
 
 async function setupTestRepository(seed = []) {
   const db = new Database(':memory:');
@@ -286,6 +286,93 @@ test('purgePiiForUser returns empty result when no PII found', async () => {
   const { db } = await setupTestRepository();
   const result = purgePiiForUser(db, 'nonexistent');
   assert.equal(result.purged.length, 0);
+});
+
+test('purgePiiForUser covers notification_preferences and unsubscribe_tokens (#927)', async () => {
+  const { db } = await setupTestRepository();
+  const now = new Date().toISOString();
+
+  db.prepare(
+    'INSERT INTO notification_preferences (user_address, channel, event_type, enabled, updated_at) VALUES (?, ?, ?, 1, ?)',
+  ).run('user1', 'email', '*', now);
+  db.prepare(
+    'INSERT INTO unsubscribe_tokens (token, user_address, channel, created_at) VALUES (?, ?, ?, ?)',
+  ).run('tok-1', 'user1', 'email', now);
+
+  const result = purgePiiForUser(db, 'user1');
+  assert.ok(result.purged.some((p) => p.table === 'notification_preferences'));
+  assert.ok(result.purged.some((p) => p.table === 'unsubscribe_tokens'));
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS n FROM notification_preferences WHERE user_address = ?').get('user1').n,
+    0,
+  );
+  assert.equal(
+    db.prepare('SELECT COUNT(*) AS n FROM unsubscribe_tokens WHERE user_address = ?').get('user1').n,
+    0,
+  );
+});
+
+// ─── PII Export Tests (#927) ────────────────────────────────────────────────
+
+test('exportPiiForUser returns matching rows keyed by table', async () => {
+  const { db } = await setupTestRepository();
+
+  db.prepare(
+    'INSERT INTO referrals (campaign_id, referrer_address, referee_address, created_at) VALUES (?, ?, ?, ?)',
+  ).run(1, 'user1', 'user2', new Date().toISOString());
+  db.prepare(
+    'INSERT INTO credit_events (user, amount, ledger, tx_hash, created_at) VALUES (?, ?, ?, ?, ?)',
+  ).run('user1', '100', 42, 'tx1', new Date().toISOString());
+
+  const result = exportPiiForUser(db, 'user1');
+  assert.equal(result.identifier, 'user1');
+  assert.ok(result.exportedAt);
+  assert.equal(result.data.referrals.length, 1);
+  assert.equal(result.data.referrals[0].referrer_address, 'user1');
+  assert.equal(result.data.credit_events.length, 1);
+  assert.equal(result.data.credit_events[0].amount, '100');
+});
+
+test('exportPiiForUser matches a wallet appearing only as referee, not just referrer', async () => {
+  const { db } = await setupTestRepository();
+  db.prepare(
+    'INSERT INTO referrals (campaign_id, referrer_address, referee_address, created_at) VALUES (?, ?, ?, ?)',
+  ).run(1, 'referrerOnly', 'refereeOnly', new Date().toISOString());
+
+  const result = exportPiiForUser(db, 'refereeOnly');
+  assert.equal(result.data.referrals.length, 1);
+  assert.equal(result.data.referrals[0].referee_address, 'refereeOnly');
+});
+
+test('exportPiiForUser omits tables with no matching rows', async () => {
+  const { db } = await setupTestRepository();
+  const result = exportPiiForUser(db, 'nonexistent');
+  assert.deepEqual(result.data, {});
+});
+
+test('exportPiiForUser redacts push_subscriptions credential fields', async () => {
+  const { db } = await setupTestRepository();
+  db.prepare(
+    'INSERT INTO push_subscriptions (user, endpoint, p256dh, auth, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run('user1', 'https://push.example/abc', 'real-p256dh-key', 'real-auth-secret', 'test-agent', Date.now());
+
+  const result = exportPiiForUser(db, 'user1');
+  assert.equal(result.data.push_subscriptions.length, 1);
+  const sub = result.data.push_subscriptions[0];
+  assert.equal(sub.p256dh, '[REDACTED]');
+  assert.equal(sub.auth, '[REDACTED]');
+  assert.equal(sub.endpoint, 'https://push.example/abc', 'endpoint should stay visible');
+});
+
+test('exportPiiForUser does not delete or modify any data', async () => {
+  const { db } = await setupTestRepository();
+  db.prepare(
+    'INSERT INTO referrals (campaign_id, referrer_address, referee_address, created_at) VALUES (?, ?, ?, ?)',
+  ).run(1, 'user1', 'user2', new Date().toISOString());
+
+  exportPiiForUser(db, 'user1');
+
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM referrals').get().n, 1);
 });
 
 // ─── Integration Test ────────────────────────────────────────────────────────

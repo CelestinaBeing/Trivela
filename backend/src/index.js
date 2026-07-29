@@ -104,7 +104,7 @@ import {
 } from './routes/notifications.js';
 import { createOperatorBalanceJob } from './jobs/operatorBalanceJob.js';
 import { createPruningJob } from './jobs/pruningJob.js';
-import { purgePiiForUser, purgePiiForCampaign } from './services/piiPurgeService.js';
+import { purgePiiForUser, purgePiiForCampaign, exportPiiForUser } from './services/piiPurgeService.js';
 import { createModerationService } from './moderation/moderationService.js';
 import { createContentModerationMiddleware } from './middleware/contentModeration.js';
 import createFaucetRoutes from './routes/faucet.js';
@@ -1618,10 +1618,6 @@ export async function createApp(options = {}) {
     if (!identifier || typeof identifier !== 'string') {
       return res.status(400).json({ error: 'identifier is required', code: 'VALIDATION_ERROR' });
     }
-    const dal = campaignRepository.db ? { db: campaignRepository.db } : null;
-    if (!dal || !dal.db) {
-      return res.status(500).json({ error: 'Database not available', code: 'DB_UNAVAILABLE' });
-    }
     const result = purgePiiForUser(dal.db, identifier);
     recordAuditEntry(req, {
       action: 'pii_purge',
@@ -1638,16 +1634,30 @@ export async function createApp(options = {}) {
     if (!campaignId) {
       return res.status(400).json({ error: 'campaignId is required', code: 'VALIDATION_ERROR' });
     }
-    const dal = campaignRepository.db ? { db: campaignRepository.db } : null;
-    if (!dal || !dal.db) {
-      return res.status(500).json({ error: 'Database not available', code: 'DB_UNAVAILABLE' });
-    }
     const result = purgePiiForCampaign(dal.db, campaignId);
     recordAuditEntry(req, {
       action: 'pii_purge',
       entity: 'campaign',
       entityId: String(campaignId),
       diff: result,
+    });
+    return res.json({ success: true, ...result });
+  }
+
+  /** @param {import('express').Request} req @param {import('express').Response} res */
+  function exportPiiUser(req, res) {
+    const { identifier } = req.body;
+    if (!identifier || typeof identifier !== 'string') {
+      return res.status(400).json({ error: 'identifier is required', code: 'VALIDATION_ERROR' });
+    }
+    const result = exportPiiForUser(dal.db, identifier);
+    recordAuditEntry(req, {
+      action: 'pii_export',
+      entity: 'user',
+      entityId: identifier,
+      // Row counts only — never the exported data itself — so the audit
+      // trail never becomes a second copy of the PII it's logging about.
+      diff: { tables: Object.fromEntries(Object.entries(result.data).map(([t, rows]) => [t, rows.length])) },
     });
     return res.json({ success: true, ...result });
   }
@@ -2297,32 +2307,35 @@ export async function createApp(options = {}) {
       listDeletedCampaigns,
     );
 
-    // PII purge routes (admin only)
+    // GDPR / PII purge + export routes (admin only, issue #927).
+    //
+    // Bug fix: this used to be two competing route registrations per path —
+    // Express only ever dispatches the first match, so the second
+    // (requireScope('org:manage'), a scope that isn't even in
+    // VALID_API_KEY_SCOPES and so could never actually pass) was silently
+    // unreachable dead code. The live behavior was "any valid tenant API
+    // key can purge any user's PII site-wide" — replaced with a single
+    // requireMasterKey-gated registration per path, consistent with every
+    // other admin-sensitive route in this file.
     app.post(
       `${prefix}/pii/purge-user`,
       rateLimiter,
-      requireApiKey,
-      purgePiiUser,
-    );
-    app.post(
-      `${prefix}/pii/purge-user`,
-      rateLimiter,
-      ...guard,
-      requireScope('org:manage'),
+      idempotencyMiddleware,
+      requireMasterKey,
       purgePiiUser,
     );
     app.post(
       `${prefix}/pii/purge-campaign`,
       rateLimiter,
-      requireApiKey,
+      idempotencyMiddleware,
+      requireMasterKey,
       purgePiiCampaign,
     );
     app.post(
-      `${prefix}/pii/purge-campaign`,
+      `${prefix}/pii/export-user`,
       rateLimiter,
-      ...guard,
-      requireScope('org:manage'),
-      purgePiiCampaign,
+      requireMasterKey,
+      exportPiiUser,
     );
 
     // Campaign translations (i18n)
