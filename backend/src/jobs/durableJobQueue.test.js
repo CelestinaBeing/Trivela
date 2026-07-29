@@ -4,6 +4,7 @@ import Database from 'better-sqlite3';
 import { runMigrations } from '../db/migrate.js';
 import { createSqliteJobQueueRepository } from '../dal/sqliteJobQueueRepository.js';
 import { createDurableJobQueue } from './durableJobQueue.js';
+import { getRequestId, runWithRequestId } from '../lib/requestContext.js';
 
 function silentLogger() {
   return { info: () => {}, warn: () => {}, error: () => {} };
@@ -207,4 +208,129 @@ test('durableJobQueue: removeById deletes a job', async () => {
   assert.ok(removed, 'removeById should return true');
   assert.equal(store.getById(id), null, 'job should not exist after removal');
   queue.stop();
+});
+
+// ── Correlation ID propagation (#925) ───────────────────────────────────────
+
+test('sqliteJobQueueRepository: requestId round-trips through enqueue/getById/claimNext', async () => {
+  const { store, queue } = await setup({});
+  const now = new Date().toISOString();
+  const id = store.enqueue({
+    type: 'x',
+    payload: null,
+    runAt: now,
+    enqueuedAt: now,
+    requestId: 'req-persisted',
+  });
+
+  assert.equal(store.getById(id)?.requestId, 'req-persisted');
+
+  const claimed = store.claimNext(60_000);
+  assert.equal(claimed?.id, id);
+  assert.equal(claimed?.requestId, 'req-persisted');
+
+  queue.stop();
+});
+
+test('sqliteJobQueueRepository: requestId is null when not provided at enqueue', async () => {
+  const { store, queue } = await setup({});
+  const now = new Date().toISOString();
+  const id = store.enqueue({ type: 'x', payload: null, runAt: now, enqueuedAt: now });
+
+  assert.equal(store.getById(id)?.requestId, null);
+  queue.stop();
+});
+
+test('durableJobQueue: a job enqueued from within a request context runs with that same requestId', async () => {
+  let observed;
+  const { queue } = await setup({
+    correlated: async () => {
+      observed = getRequestId();
+    },
+  });
+  queue.start();
+
+  runWithRequestId('req-durable', () => {
+    queue.enqueue('correlated', null, { maxAttempts: 1 });
+  });
+
+  const deadline = Date.now() + 1_000;
+  while (observed === undefined && Date.now() < deadline) await tick(20);
+  queue.stop();
+
+  assert.equal(observed, 'req-durable');
+});
+
+test('durableJobQueue: a job enqueued outside any request context still gets a correlation ID at run time', async () => {
+  let observed;
+  const { queue } = await setup({
+    uncorrelated: async () => {
+      observed = getRequestId();
+    },
+  });
+  queue.start();
+  queue.enqueue('uncorrelated', null, { maxAttempts: 1 });
+
+  const deadline = Date.now() + 1_000;
+  while (observed === undefined && Date.now() < deadline) await tick(20);
+  queue.stop();
+
+  assert.ok(observed, 'a fallback correlation ID should have been minted for the job run');
+  assert.match(observed, /^[0-9a-f-]{36}$/);
+});
+
+test('durableJobQueue: correlation ID is preserved across a retry', async () => {
+  const seen = [];
+  const { queue } = await setup({
+    flaky: async () => {
+      seen.push(getRequestId());
+      if (seen.length < 2) throw new Error('transient');
+    },
+  });
+  queue.start();
+
+  runWithRequestId('req-durable-retry', () => {
+    queue.enqueue('flaky', null, { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 5 });
+  });
+
+  const deadline = Date.now() + 2_000;
+  while (seen.length < 2 && Date.now() < deadline) await tick(20);
+  queue.stop();
+
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0], 'req-durable-retry');
+  assert.equal(seen[1], 'req-durable-retry');
+});
+
+test('durableJobQueue: correlation ID survives a simulated process restart (persisted on the row)', async () => {
+  const { db, store } = await setup({});
+  const now = new Date().toISOString();
+  store.enqueue({
+    type: 'restart-test',
+    payload: null,
+    runAt: now,
+    enqueuedAt: now,
+    requestId: 'req-before-restart',
+  });
+
+  // Simulate a fresh process: new queue instance over the same DB, with the
+  // handler registered only now (as if the app had just booted).
+  let observed;
+  const restartedQueue = createDurableJobQueue({
+    store: createSqliteJobQueueRepository({ db }),
+    handlers: {
+      'restart-test': async () => {
+        observed = getRequestId();
+      },
+    },
+    logger: silentLogger(),
+    pollIntervalMs: 10,
+  });
+  restartedQueue.start();
+
+  const deadline = Date.now() + 1_000;
+  while (observed === undefined && Date.now() < deadline) await tick(20);
+  restartedQueue.stop();
+
+  assert.equal(observed, 'req-before-restart');
 });

@@ -10,6 +10,10 @@ import { checkSorobanRpcHealth } from '../sorobanRpc.js';
 
 const router = Router();
 
+// This router has no dependency-injection point for the app's resolved RPC
+// pool, so it reads the same env var index.js falls back to directly.
+const SOROBAN_RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+
 // In-memory storage (in production, use database)
 const incidents = new Map();
 const maintenanceNotices = new Map();
@@ -63,9 +67,13 @@ router.get('/', async (req, res) => {
         if (component.id === 'rpc') {
           try {
             const start = Date.now();
-            const isHealthy = await checkSorobanRpcHealth();
+            // Bug fix (#925): this was called with no rpcUrl (fetching
+            // `undefined`) and its returned result object — always truthy,
+            // even on status: 'error' — was used directly as a boolean, so
+            // this component permanently reported "operational".
+            const health = await checkSorobanRpcHealth({ rpcUrl: SOROBAN_RPC_URL });
             latency = Date.now() - start;
-            status = isHealthy ? 'operational' : 'degraded';
+            status = health.status === 'ok' ? 'operational' : 'degraded';
           } catch {
             status = 'outage';
           }
@@ -123,7 +131,7 @@ router.get('/', async (req, res) => {
       lastUpdated: new Date().toISOString(),
     });
   } catch (error) {
-    log.error('Status page error', { error: error.message });
+    log.error({ error: error.message }, 'Status page error');
     res.status(500).json({ error: 'Failed to fetch status' });
   }
 });
@@ -172,14 +180,14 @@ router.post('/incidents', async (req, res) => {
 
     incidents.set(incidentId, incident);
 
-    log.info('Incident created', { incidentId, title: data.title, impact: data.impact });
+    log.info({ incidentId, title: data.title, impact: data.impact }, 'Incident created');
 
     res.status(201).json(incident);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Incident creation error', { error: error.message });
+    log.error({ error: error.message }, 'Incident creation error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -218,14 +226,14 @@ router.put('/incidents/:id', async (req, res) => {
 
     incidents.set(req.params.id, incident);
 
-    log.info('Incident updated', { incidentId: req.params.id, status: incident.status });
+    log.info({ incidentId: req.params.id, status: incident.status }, 'Incident updated');
 
     res.json(incident);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Incident update error', { error: error.message });
+    log.error({ error: error.message }, 'Incident update error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -241,7 +249,7 @@ router.delete('/incidents/:id', (req, res) => {
   }
 
   incidents.delete(req.params.id);
-  log.info('Incident deleted', { incidentId: req.params.id });
+  log.info({ incidentId: req.params.id }, 'Incident deleted');
 
   res.status(204).send();
 });
@@ -279,14 +287,14 @@ router.post('/maintenance', async (req, res) => {
 
     maintenanceNotices.set(maintenanceId, maintenance);
 
-    log.info('Maintenance notice created', { maintenanceId, title: data.title });
+    log.info({ maintenanceId, title: data.title }, 'Maintenance notice created');
 
     res.status(201).json(maintenance);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Maintenance creation error', { error: error.message });
+    log.error({ error: error.message }, 'Maintenance creation error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -302,7 +310,7 @@ router.delete('/maintenance/:id', (req, res) => {
   }
 
   maintenanceNotices.delete(req.params.id);
-  log.info('Maintenance notice deleted', { maintenanceId: req.params.id });
+  log.info({ maintenanceId: req.params.id }, 'Maintenance notice deleted');
 
   res.status(204).send();
 });
@@ -325,7 +333,7 @@ router.post('/subscribe', async (req, res) => {
 
     subscribers.set(subscriberId, subscriber);
 
-    log.info('Status subscription created', { subscriberId, email: data.email });
+    log.info({ subscriberId, email: data.email }, 'Status subscription created');
 
     res.status(201).json({
       id: subscriber.id,
@@ -337,7 +345,7 @@ router.post('/subscribe', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Subscription error', { error: error.message });
+    log.error({ error: error.message }, 'Subscription error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -353,7 +361,7 @@ router.delete('/subscribe/:id', (req, res) => {
   }
 
   subscribers.delete(req.params.id);
-  log.info('Status subscription deleted', { subscriberId: req.params.id });
+  log.info({ subscriberId: req.params.id }, 'Status subscription deleted');
 
   res.status(204).send();
 });
