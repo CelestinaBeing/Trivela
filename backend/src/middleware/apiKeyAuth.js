@@ -51,7 +51,7 @@ function readProvidedKey(req) {
  * @param {{
  *   apiKeys?: string | string[],
  *   apiKeyRepository?: {
- *     validate: (rawKey: string) => { id: string, label: string, orgId?: string | null, scopes?: string[] } | null,
+ *     validate: (rawKey: string) => { id: string, label: string, orgId?: string | null, scopes?: string[], rateTier?: string } | null,
  *     touchLastUsed: (id: string) => void,
  *     hasActiveKeys?: () => boolean,
  *   } | null,
@@ -113,6 +113,7 @@ export default function createApiKeyAuth({
           orgId: match.orgId ?? membership?.orgId ?? null,
           orgRole: membership?.role ?? null,
           scopes: match.scopes ?? null,
+          rateTier: match.rateTier ?? null,
         };
         return next();
       }

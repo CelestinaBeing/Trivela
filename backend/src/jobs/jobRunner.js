@@ -186,9 +186,18 @@ export function createJobRunner({
 
   scheduleNext();
 
+  /**
+   * Queue depth snapshot for monitoring (#930): jobs waiting in-memory plus
+   * whether the runner is currently executing one.
+   */
+  function getStatus() {
+    return { queued: queue.length, running: running ? 1 : 0 };
+  }
+
   return {
     enqueue,
     stop,
+    getStatus,
     // Exposed so callers (e.g. an admin "retry from dead-letter" endpoint)
     // can rebuild a job after an operator reviews it.
     _computeBackoffMs: computeBackoffMs,

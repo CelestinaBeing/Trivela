@@ -582,6 +582,17 @@ paths:
                   type: string
                   format: date-time
                   nullable: true
+                orgId:
+                  type: string
+                  description: Scope the key to an organization.
+                scopes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ApiKeyScope'
+                  description: Defaults to the full legacy scope set if omitted.
+                rateTier:
+                  $ref: '#/components/schemas/ApiKeyRateTier'
+                  description: Defaults to `standard` if omitted.
       responses:
         '201':
           description: API key created (raw key returned once)
@@ -641,6 +652,55 @@ paths:
                     type: string
                   metadata:
                     $ref: '#/components/schemas/ApiKeyMetadata'
+
+  /api/v1/admin/api-keys/{id}/rate-tier:
+    put:
+      summary: Update an API key's rate tier
+      description: >-
+        Changes the enforced rate-limit tier in place, without rotating (and
+        thus invalidating) the caller's existing credential.
+      tags:
+        - Admin
+      operationId: updateApiKeyRateTier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rateTier
+              properties:
+                rateTier:
+                  $ref: '#/components/schemas/ApiKeyRateTier'
+      responses:
+        '200':
+          description: Rate tier updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    $ref: '#/components/schemas/ApiKeyMetadata'
+        '400':
+          description: Invalid rate tier value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/v1/audit-logs:
     get:
@@ -1909,6 +1969,17 @@ components:
           type: string
         label:
           type: string
+        orgId:
+          type: string
+          nullable: true
+          description: Organization the key is scoped to, if any.
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyScope'
+          description: Granular permissions granted to the key.
+        rateTier:
+          $ref: '#/components/schemas/ApiKeyRateTier'
         createdAt:
           type: string
           format: date-time
@@ -1922,6 +1993,17 @@ components:
           nullable: true
         active:
           type: boolean
+
+    ApiKeyScope:
+      type: string
+      enum: [campaigns:read, campaigns:write, allowlist:write, admin]
+
+    ApiKeyRateTier:
+      type: string
+      enum: [standard, pro, enterprise]
+      description: >-
+        Per-key rate-limit tier enforced by the rate limiter (#924). `standard`
+        is 60 req/min, `pro` is 300 req/min, `enterprise` is 1000 req/min.
 
     Error:
       type: object

@@ -118,6 +118,43 @@ repeatedly fail authentication on a guarded route.
 4. Tune thresholds via `AUTH_LOCKOUT_SOFT_THRESHOLD`, `AUTH_LOCKOUT_HARD_THRESHOLD`, and
    `AUTH_LOCKOUT_BASE_MS` if the defaults are too aggressive/lenient, then restart the backend.
 
+## DLQ Investigation
+
+Triggered by the `DLQGrowth` alert, or a rising `trivela_dlq_size_total` / `trivela_job_queue_dead_total`
+on `/metrics`. Both background job queues (the in-memory `jobRunner` and the persistent
+`durableJobQueue`) write to the same `failed_jobs` table once a job exhausts `maxAttempts`.
+
+1. List recent dead-letter entries to see which job `type` is failing and why:
+   - In-memory `jobRunner` failures: `GET /api/v1/jobs/failed`
+   - Durable `durableJobQueue` failures: `GET /api/v1/admin/jobs/dlq` (requires the master API key)
+   ```bash
+   curl -s "$API_URL/api/v1/jobs/failed?limit=20" -H "x-api-key: $API_KEY" | jq
+   ```
+2. Check backend logs around the failure timestamps for the underlying error
+   (`job:dead type=... error=...` / `durableQueue:dead type=... error=...`).
+3. Fix the root cause (bad payload, downstream outage, bug in the handler).
+4. If the jobs are now safe to retry, re-enqueue via `POST /api/v1/jobs/retry/:id` (in-memory) or
+   `POST /api/v1/admin/jobs/:id/replay` (durable); otherwise leave them so the DLQ count reflects
+   only unresolved failures.
+5. Watch `trivela_job_queue_depth{queue="durable"}` in Grafana → Trivela Jobs
+   (`monitoring/dashboards/trivela-jobs.json`) to confirm the backlog is draining, not just the DLQ.
+
+## Job Queue Backlog
+
+Triggered by the `JobQueueBacklog` alert, or `trivela_job_queue_depth{queue="durable"}` climbing on
+`/metrics`. This means jobs are being enqueued faster than the durable queue's single poller can
+drain them (default `pollIntervalMs` = 5 s, one job per poll).
+
+1. Confirm the backend process is up and `durableJobQueue.start()` is running (check `/health` and
+   backend logs for `durableQueue:` entries).
+2. Check whether one job `type` dominates the backlog — a slow or hanging handler blocks the whole
+   queue since `processNext()` processes one job at a time.
+3. If the backlog is due to a legitimate traffic spike, it should self-drain; if a handler is stuck
+   or erroring repeatedly, expect it to also show up as [DLQ growth](#dlq-investigation) once
+   `maxAttempts` is exhausted.
+4. As a stopgap, restart the backend to clear any wedged in-flight job (protected by the
+   `visibilityTimeoutMs` stale-job recovery on the next `start()`).
+
 ## Database Migration Failures
 
 If `npm run db:migrate` fails during deployment:

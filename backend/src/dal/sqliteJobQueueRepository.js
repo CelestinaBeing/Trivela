@@ -93,6 +93,10 @@ export function createSqliteJobQueueRepository({ db }) {
 
   const countDeadStmt = db.prepare(`SELECT COUNT(*) AS n FROM job_queue WHERE status = 'dead'`);
 
+  const countByStatusStmt = db.prepare(
+    `SELECT COUNT(*) AS n FROM job_queue WHERE status = ?`,
+  );
+
   const findByIdStmt = db.prepare('SELECT * FROM job_queue WHERE id = ? LIMIT 1');
 
   const deleteByIdStmt = db.prepare('DELETE FROM job_queue WHERE id = ?');
@@ -204,6 +208,17 @@ export function createSqliteJobQueueRepository({ db }) {
   }
 
   /**
+   * Count jobs currently in a given status ('pending' | 'running' | 'dead').
+   * Used to report queue depth for monitoring (#930).
+   *
+   * @param {string} status
+   */
+  function countByStatus(status) {
+    const row = countByStatusStmt.get(status);
+    return row?.n ?? 0;
+  }
+
+  /**
    * @param {string} id
    */
   function getById(id) {
@@ -219,5 +234,16 @@ export function createSqliteJobQueueRepository({ db }) {
     return info.changes > 0;
   }
 
-  return { enqueue, claimNext, ack, nack, recoverStale, listDead, countDead, getById, removeById };
+  return {
+    enqueue,
+    claimNext,
+    ack,
+    nack,
+    recoverStale,
+    listDead,
+    countDead,
+    countByStatus,
+    getById,
+    removeById,
+  };
 }

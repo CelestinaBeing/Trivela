@@ -64,6 +64,10 @@ export function createRateLimiter({
   timeProvider = () => Date.now(),
   keyGenerator = defaultKeyGenerator,
   store = null,
+  // Optional per-request override (#924 — per-API-key rate tiers). Given the
+  // request, returns `{ maxRequests, windowMs }` to use instead of the static
+  // defaults above, or a falsy value to fall back to them. Sync or async.
+  resolveLimits = null,
 } = {}) {
   const rateLimitStore = store || createMemoryStore();
 
@@ -71,30 +75,33 @@ export function createRateLimiter({
     try {
       const now = timeProvider();
       const key = keyGenerator(req);
+      const override = resolveLimits ? await resolveLimits(req) : null;
+      const effectiveMaxRequests = override?.maxRequests ?? maxRequests;
+      const effectiveWindowMs = override?.windowMs ?? windowMs;
 
-      const { count, resetAt } = await rateLimitStore.increment(key, windowMs, now);
+      const { count, resetAt } = await rateLimitStore.increment(key, effectiveWindowMs, now);
 
-      const remaining = Math.max(maxRequests - count, 0);
+      const remaining = Math.max(effectiveMaxRequests - count, 0);
       const resetSeconds = Math.max(1, Math.ceil((resetAt - now) / 1000));
-      const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-      res.setHeader('X-RateLimit-Limit', String(maxRequests));
+      const windowSeconds = Math.max(1, Math.ceil(effectiveWindowMs / 1000));
+      res.setHeader('X-RateLimit-Limit', String(effectiveMaxRequests));
       res.setHeader('X-RateLimit-Remaining', String(remaining));
       res.setHeader('X-RateLimit-Reset', String(resetSeconds));
-      res.setHeader('RateLimit-Policy', `${maxRequests};w=${windowSeconds}`);
+      res.setHeader('RateLimit-Policy', `${effectiveMaxRequests};w=${windowSeconds}`);
       res.setHeader(
         'RateLimit',
-        `limit=${maxRequests}, remaining=${remaining}, reset=${resetSeconds}`,
+        `limit=${effectiveMaxRequests}, remaining=${remaining}, reset=${resetSeconds}`,
       );
 
-      if (count > maxRequests) {
+      if (count > effectiveMaxRequests) {
         const retryAfterSeconds = resetSeconds;
         res.setHeader('Retry-After', String(retryAfterSeconds));
         return res.status(429).json({
           error: 'Rate limit exceeded',
           code: 'RATE_LIMIT_EXCEEDED',
           keying: 'per API key when present, otherwise per IP address',
-          limit: maxRequests,
-          windowMs,
+          limit: effectiveMaxRequests,
+          windowMs: effectiveWindowMs,
           retryAfterSeconds,
         });
       }

@@ -525,6 +525,25 @@ test('GET /metrics exposes minimal Prometheus metrics', async () => {
   }
 });
 
+test('GET /metrics exposes job queue depth and DLQ size (#930)', async () => {
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/metrics`);
+    assert.equal(response.status, 200);
+
+    const body = await response.text();
+    assert.match(body, /trivela_job_queue_depth\{queue="in_memory"\} \d+/);
+    assert.match(body, /trivela_job_queue_depth\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_job_queue_running\{queue="in_memory"\} \d+/);
+    assert.match(body, /trivela_job_queue_running\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_job_queue_dead_total\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_dlq_size_total \d+/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
 test('POST /api/v1/campaigns creates a new campaign and returns it', async () => {
   const { server, baseUrl } = await startTestServer();
 
