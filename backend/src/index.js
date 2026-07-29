@@ -1666,10 +1666,12 @@ export async function createApp(options = {}) {
     const entity = typeof req.query.entity === 'string' ? req.query.entity.trim() : '';
     const entityId = typeof req.query.entityId === 'string' ? req.query.entityId.trim() : '';
     const action = typeof req.query.action === 'string' ? req.query.action.trim() : '';
+    const orgId = typeof req.query.orgId === 'string' ? req.query.orgId.trim() : '';
     const items = auditLogRepository.list({
       entity: entity || undefined,
       entityId: entityId || undefined,
       action: action || undefined,
+      orgId: orgId || undefined,
     });
     return res.json(paginateItems(items, req.query));
   }
@@ -1699,9 +1701,16 @@ export async function createApp(options = {}) {
       });
     }
     const { cursor } = result.data;
+    const previousCursor = indexerCursorState.cursor;
     indexerCursorState.cursor = cursor;
     indexerCursorState.updatedAt = new Date().toISOString();
     indexerCursorState.source = 'api';
+    recordAuditEntry(req, {
+      action: 'update',
+      entity: 'indexerCursor',
+      entityId: 'global',
+      diff: { previousCursor, newCursor: cursor },
+    });
     return res.status(200).json({
       ok: true,
       cursor: indexerCursorState.cursor,
@@ -2313,6 +2322,12 @@ export async function createApp(options = {}) {
         hardLimit,
         windowSeconds,
       });
+      recordAuditEntry(req, {
+        action: 'update',
+        entity: 'usageQuota',
+        entityId: `${orgId}:${resource}`,
+        diff: { orgId, resource, softLimit, hardLimit, windowSeconds },
+      });
       return res.json(quota);
     });
 
@@ -2772,6 +2787,7 @@ export async function createApp(options = {}) {
       orgMemberRepository,
       requireMasterKey,
       requireApiKey,
+      recordAuditEntry,
     });
     app.use(prefix, rateLimiter, orgRouter);
 
@@ -2787,6 +2803,7 @@ export async function createApp(options = {}) {
       variantRepo: variantRepository,
       variantService,
       campaignRepo: campaignRepository,
+      recordAuditEntry,
     });
     app.use(prefix, rateLimiter, ...guard, variantRouter);
 
@@ -2820,7 +2837,7 @@ export async function createApp(options = {}) {
     const featureFlagService = createFeatureFlagService({
       featureFlagRepository: dal.featureFlags,
     });
-    const featureFlagRouter = createFeatureFlagRoutes({ featureFlagService });
+    const featureFlagRouter = createFeatureFlagRoutes({ featureFlagService, requireApiKey, recordAuditEntry });
     app.use(`${prefix}/feature-flags`, rateLimiter, featureFlagRouter);
 
     // #560 — Public read API over indexed data (cursor-paginated, ETag cached)

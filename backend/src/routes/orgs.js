@@ -21,9 +21,10 @@ import { VALID_ROLES } from '../dal/sqliteOrgMemberRepository.js';
  *   orgMemberRepository: ReturnType<import('../dal/sqliteOrgMemberRepository.js').createSqliteOrgMemberRepository>,
  *   requireMasterKey: import('express').RequestHandler[],
  *   requireApiKey: import('express').RequestHandler[],
+ *   recordAuditEntry: (req: import('express').Request, entry: { action: string, entity: string, entityId: string, diff: unknown }) => void,
  * }} deps
  */
-export function createOrgRoutes({ orgMemberRepository, requireMasterKey, requireApiKey }) {
+export function createOrgRoutes({ orgMemberRepository, requireMasterKey, requireApiKey, recordAuditEntry }) {
   const router = Router();
 
   // ── Create org (master-key only — bootstrapping) ──────────────────────────
@@ -34,6 +35,12 @@ export function createOrgRoutes({ orgMemberRepository, requireMasterKey, require
       return res.status(400).json({ error: 'name is required', code: 'VALIDATION_ERROR' });
     }
     const org = orgMemberRepository.createOrg({ name: name.trim() });
+    recordAuditEntry(req, {
+      action: 'create',
+      entity: 'organization',
+      entityId: org.id,
+      diff: { name: name.trim() },
+    });
     return res.status(201).json(org);
   });
 
@@ -60,6 +67,13 @@ export function createOrgRoutes({ orgMemberRepository, requireMasterKey, require
 
     const deleted = orgMemberRepository.deleteOrg(req.params.orgId);
     if (!deleted) return res.status(404).json({ error: 'Org not found', code: 'ORG_NOT_FOUND' });
+
+    recordAuditEntry(req, {
+      action: 'delete',
+      entity: 'organization',
+      entityId: req.params.orgId,
+      diff: null,
+    });
 
     return res.status(204).end();
   });
@@ -99,6 +113,12 @@ export function createOrgRoutes({ orgMemberRepository, requireMasterKey, require
           orgId: req.params.orgId,
           apiKeyId: apiKeyId.trim(),
           role,
+        });
+        recordAuditEntry(req, {
+          action: 'add_member',
+          entity: 'organization_member',
+          entityId: membership.id,
+          diff: { orgId: req.params.orgId, apiKeyId: apiKeyId.trim(), role },
         });
         return res.status(201).json(membership);
       } catch (err) {
@@ -172,6 +192,12 @@ export function createOrgRoutes({ orgMemberRepository, requireMasterKey, require
       }
 
       orgMemberRepository.updateRole(req.params.membershipId, role);
+      recordAuditEntry(req, {
+        action: 'update_member',
+        entity: 'organization_member',
+        entityId: req.params.membershipId,
+        diff: { orgId: req.params.orgId, previousRole: membership.role, newRole: role },
+      });
       return res.json({ ...membership, role });
     },
   );
@@ -200,6 +226,12 @@ export function createOrgRoutes({ orgMemberRepository, requireMasterKey, require
       }
 
       orgMemberRepository.removeMember(req.params.membershipId);
+      recordAuditEntry(req, {
+        action: 'remove_member',
+        entity: 'organization_member',
+        entityId: req.params.membershipId,
+        diff: { orgId: req.params.orgId, apiKeyId: membership.apiKeyId, role: membership.role },
+      });
       return res.status(204).end();
     },
   );
