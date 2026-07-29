@@ -98,6 +98,7 @@ export default function CampaignDetail({
         }
         path={`/campaign/${id}`}
         image={campaignImage}
+        imageAlt={campaign ? `${campaign.name} campaign share card` : 'Trivela campaign share card'}
         jsonLd={campaignJsonLd}
       />
       <Header

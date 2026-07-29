@@ -110,6 +110,7 @@ For detailed system architecture documentation:
 
 - **System Map** – Diagram, trust boundaries, and end-to-end data flows: [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md)
 - **Network Configuration** – Stellar testnet/mainnet presets and runtime config flow: [`docs/STELLAR_NETWORKS.md`](docs/STELLAR_NETWORKS.md)
+- **Mainnet Readiness** – Go/no-go gate and sign-off checklist for production deploy: [`docs/MAINNET_READINESS.md`](docs/MAINNET_READINESS.md)
 
 ---
 
