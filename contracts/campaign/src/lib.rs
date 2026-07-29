@@ -119,6 +119,10 @@ pub const TTL_EXTEND_TO: u32 = 100;
 const ADMIN: Symbol = symbol_short!("admin");
 const CAMPAIGN_ACTIVE: Symbol = symbol_short!("active");
 const PARTICIPANT: Symbol = symbol_short!("partic");
+// Participation history marker (issue #740): persists across deregistration
+// and merkle root rotations so the same identity cannot double-register or
+// inflate referral counts by cycling de/re-register.
+const PARTICIPATED: Symbol = symbol_short!("ptcipd");
 const START_TIME: Symbol = symbol_short!("start");
 const END_TIME: Symbol = symbol_short!("end");
 const MAX_CAP: Symbol = symbol_short!("maxcap");
@@ -918,9 +922,29 @@ impl CampaignContract {
             None
         };
 
-        let was_new = do_register(&env, participant, referrer)?;
+        // Participation barrier (issue #740): reject any participant whose
+        // history marker is set, even after deregistration or root rotation.
+        let participation_key = (PARTICIPATED, participant.clone());
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&participation_key)
+            .unwrap_or(false)
+        {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        let was_new = do_register(&env, participant.clone(), referrer)?;
 
         if was_new {
+            // Stamp the participation history so this identity cannot
+            // re-register after deregistration or across root rotations.
+            env.storage().persistent().set(&participation_key, &true);
+            env.storage().persistent().extend_ttl(
+                &participation_key,
+                PARTICIPANT_TTL_THRESHOLD,
+                PARTICIPANT_TTL_EXTEND_TO,
+            );
             if let Some(hash) = invite_hash {
                 env.storage().instance().set(&(INVITE_USED, hash), &true);
             }
@@ -967,6 +991,39 @@ impl CampaignContract {
     ) -> Result<bool, Error> {
         require_admin_with_nonce(&env, &admin, nonce)?;
         Ok(do_deregister(&env, participant))
+    }
+
+    /// Explicitly clear the participation history for a participant (issue #740).
+    ///
+    /// Once cleared, the participant may re-register as if they had never
+    /// participated. The admin must decide whether this is appropriate (e.g.
+    /// for an erroneously blocked address). Separate from `admin_deregister`
+    /// so clearing participation is always an explicit, auditable opt-in.
+    pub fn clear_participation(
+        env: Env,
+        admin: Address,
+        nonce: u64,
+        participant: Address,
+    ) -> Result<(), Error> {
+        require_admin_with_nonce(&env, &admin, nonce)?;
+        env.storage()
+            .persistent()
+            .remove(&(PARTICIPATED, participant));
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    /// Check whether the participation history marker is set for an address.
+    ///
+    /// Returns `true` even if the participant has since deregistered — this
+    /// is intentional: the marker persists to prevent re-registration.
+    pub fn has_participated(env: Env, participant: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get::<_, bool>(&(PARTICIPATED, participant))
+            .unwrap_or(false)
     }
 
     /// Check if a participant is registered. (#280) Reads from
