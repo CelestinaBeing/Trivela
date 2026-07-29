@@ -14,16 +14,16 @@ acceptance criteria for a user-controlled selective disclosure mechanism.
 
 ### Core concept
 
-Each private record (e.g., reward claim, campaign participation event) is encrypted with a
-symmetric key `K_record` derived from the user's master view key `VK_user`:
+Each private record (e.g., reward claim, campaign participation event) is encrypted with a symmetric
+key `K_record` derived from the user's master view key `VK_user`:
 
 ```
 K_record = KDF(VK_user, record_id)
 ```
 
 Disclosing a record means sharing the one-time key `K_record` (derived from `VK_user` and
-`record_id`), not the master key. An auditor who receives `K_record` can decrypt exactly that
-record and nothing else.
+`record_id`), not the master key. An auditor who receives `K_record` can decrypt exactly that record
+and nothing else.
 
 ### Key hierarchy
 
@@ -54,13 +54,13 @@ The backend verifies the signature before granting the auditor access.
 
 ## Threat model
 
-| Threat | Mitigation |
-|--------|-----------|
-| Auditor reads records beyond the disclosed scope | Each `K_record` decrypts only one record; no path to `VK_user` |
-| Disclosure package forged by a third party | Package is signed by the user's Stellar keypair; backend verifies |
-| Stale disclosure (reuse after audit window) | `expires_at` enforced server-side; packages rejected after expiry |
-| User denies having disclosed | On-chain hash of disclosure package committed by user at time of grant |
-| Backend impersonation | Disclosure package is verified client-side against known server pubkey |
+| Threat                                           | Mitigation                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Auditor reads records beyond the disclosed scope | Each `K_record` decrypts only one record; no path to `VK_user`         |
+| Disclosure package forged by a third party       | Package is signed by the user's Stellar keypair; backend verifies      |
+| Stale disclosure (reuse after audit window)      | `expires_at` enforced server-side; packages rejected after expiry      |
+| User denies having disclosed                     | On-chain hash of disclosure package committed by user at time of grant |
+| Backend impersonation                            | Disclosure package is verified client-side against known server pubkey |
 
 ---
 

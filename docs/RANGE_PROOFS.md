@@ -4,9 +4,9 @@
 
 ## Summary
 
-Soroban contracts handling confidential balances and reward claims need to validate that amounts
-are within legal bounds (e.g., `0 < amount ≤ MAX_REWARD`) without revealing the actual value.
-This document defines the integration surface and threat model for a reusable range-proof module.
+Soroban contracts handling confidential balances and reward claims need to validate that amounts are
+within legal bounds (e.g., `0 < amount ≤ MAX_REWARD`) without revealing the actual value. This
+document defines the integration surface and threat model for a reusable range-proof module.
 
 ---
 
@@ -14,13 +14,13 @@ This document defines the integration surface and threat model for a reusable ra
 
 ### Goal
 
-Given a commitment `C = Commit(v, r)` (Pedersen commitment), prove that `v ∈ [low, high]`
-without revealing `v` or the blinding factor `r`.
+Given a commitment `C = Commit(v, r)` (Pedersen commitment), prove that `v ∈ [low, high]` without
+revealing `v` or the blinding factor `r`.
 
 ### Approach — Bulletproofs (compressed range proofs)
 
-Bulletproofs produce proofs of size `O(log n)` bits rather than `O(n)`, making them suitable
-for on-chain verification within Soroban's instruction budget.
+Bulletproofs produce proofs of size `O(log n)` bits rather than `O(n)`, making them suitable for
+on-chain verification within Soroban's instruction budget.
 
 A Rust implementation will expose:
 
@@ -37,12 +37,12 @@ pub fn verify_range_proof(
 
 ### Threat model
 
-| Threat | Mitigation |
-|--------|-----------|
-| Proof forgery (prover claims v in range when it isn't) | Soundness of Bulletproofs under DLP hardness assumption |
-| Replay of a valid proof for a different commitment | Commitment binds to specific (v, r); proof is tied to C |
-| Negative or overflow amounts | Explicit lower bound `low = 1`; upper bound caps max reward |
-| Instruction budget exceeded | Pre-verify proof byte-length; skip verification if proof absent (permissioned fallback) |
+| Threat                                                 | Mitigation                                                                              |
+| ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Proof forgery (prover claims v in range when it isn't) | Soundness of Bulletproofs under DLP hardness assumption                                 |
+| Replay of a valid proof for a different commitment     | Commitment binds to specific (v, r); proof is tied to C                                 |
+| Negative or overflow amounts                           | Explicit lower bound `low = 1`; upper bound caps max reward                             |
+| Instruction budget exceeded                            | Pre-verify proof byte-length; skip verification if proof absent (permissioned fallback) |
 
 ---
 

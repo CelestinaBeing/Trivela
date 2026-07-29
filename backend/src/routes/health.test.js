@@ -18,7 +18,13 @@ function buildApp(overrides = {}) {
     fetchImpl: undefined,
     rpcHealthCache: { payload: null },
     eventIndexer: {
-      getHealth: () => ({ status: 'ok', lastLedger: 100, lagLedgers: 0, eventsTotal: 500, errorsTotal: 0 }),
+      getHealth: () => ({
+        status: 'ok',
+        lastLedger: 100,
+        lagLedgers: 0,
+        eventsTotal: 500,
+        errorsTotal: 0,
+      }),
     },
     jobRunner: { getStatus: () => ({ queueLength: 3 }) },
     durableJobQueue: { getStatus: () => ({ pending: 1 }) },
@@ -97,7 +103,15 @@ describe('GET /health/indexer', () => {
 
   it('returns 503 when indexer status is error', async () => {
     const { app } = buildApp({
-      eventIndexer: { getHealth: () => ({ status: 'error', lastLedger: 0, lagLedgers: 99, eventsTotal: 0, errorsTotal: 5 }) },
+      eventIndexer: {
+        getHealth: () => ({
+          status: 'error',
+          lastLedger: 0,
+          lagLedgers: 99,
+          eventsTotal: 0,
+          errorsTotal: 5,
+        }),
+      },
     });
     const res = await request(app).get('/health/indexer');
     expect(res.status).toBe(503);

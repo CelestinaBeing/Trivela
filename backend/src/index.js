@@ -111,7 +111,11 @@ import {
 } from './routes/notifications.js';
 import { createOperatorBalanceJob } from './jobs/operatorBalanceJob.js';
 import { createPruningJob } from './jobs/pruningJob.js';
-import { purgePiiForUser, purgePiiForCampaign, exportPiiForUser } from './services/piiPurgeService.js';
+import {
+  purgePiiForUser,
+  purgePiiForCampaign,
+  exportPiiForUser,
+} from './services/piiPurgeService.js';
 import { createModerationService } from './moderation/moderationService.js';
 import { createContentModerationMiddleware } from './middleware/contentModeration.js';
 import createFaucetRoutes from './routes/faucet.js';
@@ -937,9 +941,9 @@ export async function createApp(options = {}) {
   });
 
   const graphqlHandler = createGraphQLHandler({
-    executor: new GraphQLSchemaExecutor({ campaignRepository, indexerRepository }),
+    executor: new GraphQLSchemaExecutor({ campaignRepository }),
   });
-  app.all('/graphql', defaultRateLimiter, graphqlHandler);
+  app.all('/graphql', rateLimiter, graphqlHandler);
 
   const siteOrigin =
     process.env.SITE_ORIGIN ?? allowedOrigins.find((origin) => origin !== '*') ?? '';
@@ -987,13 +991,20 @@ export async function createApp(options = {}) {
     try {
       swaggerSpec = yamlLoad(readFileSync(openApiPath, 'utf8'));
     } catch {
-      swaggerSpec = { openapi: '3.0.0', info: { title: 'Trivela API', version: '0.0.0' }, paths: {} };
+      swaggerSpec = {
+        openapi: '3.0.0',
+        info: { title: 'Trivela API', version: '0.0.0' },
+        paths: {},
+      };
     }
     app.use('/docs', swaggerUi.serve);
-    app.get('/docs', swaggerUi.setup(swaggerSpec, {
-      customSiteTitle: 'Trivela API Reference',
-      swaggerOptions: { persistAuthorization: true },
-    }));
+    app.get(
+      '/docs',
+      swaggerUi.setup(swaggerSpec, {
+        customSiteTitle: 'Trivela API Reference',
+        swaggerOptions: { persistAuthorization: true },
+      }),
+    );
   })();
 
   app.get('/health/rpc', async (_req, res) => {
@@ -1622,7 +1633,9 @@ export async function createApp(options = {}) {
   function restoreCampaign(req, res) {
     const restored = campaignRepository.restore(req.params.id);
     if (!restored) {
-      return res.status(404).json({ error: 'Campaign not found or not deleted', code: 'CAMPAIGN_NOT_FOUND' });
+      return res
+        .status(404)
+        .json({ error: 'Campaign not found or not deleted', code: 'CAMPAIGN_NOT_FOUND' });
     }
     recordAuditEntry(req, {
       action: 'restore',
@@ -1668,7 +1681,9 @@ export async function createApp(options = {}) {
   /** @param {import('express').Request} req @param {import('express').Response} res */
   function listDeletedCampaigns(req, res) {
     const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
-    const olderThanDays = req.query.olderThanDays ? parseInt(req.query.olderThanDays, 10) : undefined;
+    const olderThanDays = req.query.olderThanDays
+      ? parseInt(req.query.olderThanDays, 10)
+      : undefined;
     const campaigns = campaignRepository.listDeleted({ limit, olderThanDays });
     return res.json({ campaigns, total: campaigns.length });
   }
@@ -1718,7 +1733,11 @@ export async function createApp(options = {}) {
       entityId: identifier,
       // Row counts only — never the exported data itself — so the audit
       // trail never becomes a second copy of the PII it's logging about.
-      diff: { tables: Object.fromEntries(Object.entries(result.data).map(([t, rows]) => [t, rows.length])) },
+      diff: {
+        tables: Object.fromEntries(
+          Object.entries(result.data).map(([t, rows]) => [t, rows.length]),
+        ),
+      },
     });
     return res.json({ success: true, ...result });
   }
@@ -2341,12 +2360,7 @@ export async function createApp(options = {}) {
       requireScope('campaigns:write'),
       restoreCampaign,
     );
-    app.delete(
-      `${prefix}/campaigns/:id/purge`,
-      rateLimiter,
-      requireApiKey,
-      purgeCampaign,
-    );
+    app.delete(`${prefix}/campaigns/:id/purge`, rateLimiter, requireApiKey, purgeCampaign);
     app.delete(
       `${prefix}/campaigns/:id/purge`,
       rateLimiter,
@@ -2354,12 +2368,7 @@ export async function createApp(options = {}) {
       requireScope('campaigns:write'),
       purgeCampaign,
     );
-    app.get(
-      `${prefix}/campaigns/deleted`,
-      rateLimiter,
-      requireApiKey,
-      listDeletedCampaigns,
-    );
+    app.get(`${prefix}/campaigns/deleted`, rateLimiter, requireApiKey, listDeletedCampaigns);
     app.get(
       `${prefix}/campaigns/deleted`,
       rateLimiter,
@@ -2392,12 +2401,7 @@ export async function createApp(options = {}) {
       requireMasterKey,
       purgePiiCampaign,
     );
-    app.post(
-      `${prefix}/pii/export-user`,
-      rateLimiter,
-      requireMasterKey,
-      exportPiiUser,
-    );
+    app.post(`${prefix}/pii/export-user`, rateLimiter, requireMasterKey, exportPiiUser);
 
     // Campaign translations (i18n)
     app.get(`${prefix}/campaigns/:id/translations`, rateLimiter, ...guard, (req, res) => {
@@ -3124,7 +3128,11 @@ export async function createApp(options = {}) {
     const featureFlagService = createFeatureFlagService({
       featureFlagRepository: dal.featureFlags,
     });
-    const featureFlagRouter = createFeatureFlagRoutes({ featureFlagService, requireApiKey, recordAuditEntry });
+    const featureFlagRouter = createFeatureFlagRoutes({
+      featureFlagService,
+      requireApiKey,
+      recordAuditEntry,
+    });
     app.use(`${prefix}/feature-flags`, rateLimiter, featureFlagRouter);
 
     // #560 — Public read API over indexed data (cursor-paginated, ETag cached)

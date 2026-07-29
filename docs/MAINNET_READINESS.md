@@ -3,12 +3,12 @@
 > **Status:** In progress — all items must be checked and signed off before any `mainnet` deploy
 > workflow is approved.
 
-This document is the single source of truth for Trivela mainnet readiness. Each item must be
-checked off by a named owner and linked to verifiable evidence (merged PR, audit report, deploy
-transaction, monitoring dashboard) before the go/no-go call is made.
+This document is the single source of truth for Trivela mainnet readiness. Each item must be checked
+off by a named owner and linked to verifiable evidence (merged PR, audit report, deploy transaction,
+monitoring dashboard) before the go/no-go call is made.
 
-The deploy workflow (`.github/workflows/mainnet-deploy.yml`) is gated on this checklist: a
-required status check verifies the file has no unchecked boxes before the job proceeds.
+The deploy workflow (`.github/workflows/mainnet-deploy.yml`) is gated on this checklist: a required
+status check verifies the file has no unchecked boxes before the job proceeds.
 
 ---
 
@@ -17,14 +17,14 @@ required status check verifies the file has no unchecked boxes before the job pr
 A **Go** decision requires every section below to be fully checked **and** signed off by its
 designated owner. Any unchecked item is an automatic **No-Go**.
 
-| Section | Sign-off Owner |
-|---|---|
-| Smart Contracts | Lead Contract Engineer |
-| Security & Compliance | Security Lead |
-| Backend | Backend Lead |
-| Frontend | Frontend Lead |
-| Infrastructure & Ops | Platform Lead |
-| Financial Safety | Finance / Risk Lead |
+| Section               | Sign-off Owner         |
+| --------------------- | ---------------------- |
+| Smart Contracts       | Lead Contract Engineer |
+| Security & Compliance | Security Lead          |
+| Backend               | Backend Lead           |
+| Frontend              | Frontend Lead          |
+| Infrastructure & Ops  | Platform Lead          |
+| Financial Safety      | Finance / Risk Lead    |
 
 ---
 
@@ -100,8 +100,8 @@ designated owner. Any unchecked item is an automatic **No-Go**.
 
 ## Sign-off Log
 
-| Date | Owner | Section | Evidence |
-|---|---|---|---|
+| Date     | Owner    | Section     | Evidence         |
+| -------- | -------- | ----------- | ---------------- |
 | _(date)_ | _(name)_ | _(section)_ | _(link or note)_ |
 
 ---

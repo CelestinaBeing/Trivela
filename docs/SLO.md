@@ -64,11 +64,11 @@ hanging indefinitely.
 
 ## 4a. Job queue backlog SLO
 
-| Signal                    | SLI                                                    | SLO target                    |
-| -------------------------- | ------------------------------------------------------ | ------------------------------ |
-| Durable queue backlog      | `trivela_job_queue_depth{queue="durable"}`              | ≤ 100 pending jobs sustained   |
-| Durable queue drain rate   | Backlog should trend down between polls (see dashboard) | No sustained growth over 10 min |
-| Dead-letter queue size     | `trivela_dlq_size_total`                                | 0 sustained; investigate any growth |
+| Signal                   | SLI                                                     | SLO target                          |
+| ------------------------ | ------------------------------------------------------- | ----------------------------------- |
+| Durable queue backlog    | `trivela_job_queue_depth{queue="durable"}`              | ≤ 100 pending jobs sustained        |
+| Durable queue drain rate | Backlog should trend down between polls (see dashboard) | No sustained growth over 10 min     |
+| Dead-letter queue size   | `trivela_dlq_size_total`                                | 0 sustained; investigate any growth |
 
 **Alert:** `JobQueueBacklog` fires when `trivela_job_queue_depth{queue="durable"} > 100` for 10
 continuous minutes. `DLQGrowth` fires when the dead-letter store grows by more than 10 jobs over 15

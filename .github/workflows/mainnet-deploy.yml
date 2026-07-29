@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type DEPLOY to confirm you have reviewed MAINNET_READINESS.md"
+        description: 'Type DEPLOY to confirm you have reviewed MAINNET_READINESS.md'
         required: true
 
 jobs:

@@ -61,7 +61,8 @@ export class GraphQLSchemaExecutor {
       }
 
       if (trimmed.includes('balances') || trimmed.includes('balance(')) {
-        const address = variables.address ?? this._extractArg(trimmed, 'address') ?? context.userAddress;
+        const address =
+          variables.address ?? this._extractArg(trimmed, 'address') ?? context.userAddress;
         data.balances = await this.resolveBalances(address);
       }
 
@@ -71,7 +72,8 @@ export class GraphQLSchemaExecutor {
       }
 
       if (trimmed.includes('history')) {
-        const address = variables.address ?? this._extractArg(trimmed, 'address') ?? context.userAddress;
+        const address =
+          variables.address ?? this._extractArg(trimmed, 'address') ?? context.userAddress;
         const limit = variables.limit ?? 20;
         data.history = await this.resolveHistory(address, limit);
       }
@@ -100,9 +102,7 @@ export class GraphQLSchemaExecutor {
       const result = await this.campaignRepository.listCampaigns({ limit, offset });
       return result.campaigns || result.data || result;
     }
-    return [
-      { id: '1', name: 'Sample Campaign', active: true, rewardPerAction: 10 },
-    ];
+    return [{ id: '1', name: 'Sample Campaign', active: true, rewardPerAction: 10 }];
   }
 
   async resolveCampaign(id) {
@@ -138,8 +138,6 @@ export class GraphQLSchemaExecutor {
     if (this.indexerRepository?.getHistory) {
       return await this.indexerRepository.getHistory(address, limit);
     }
-    return [
-      { id: 'evt_1', type: 'Pledge', amount: '100', timestamp: Date.now() },
-    ];
+    return [{ id: 'evt_1', type: 'Pledge', amount: '100', timestamp: Date.now() }];
   }
 }

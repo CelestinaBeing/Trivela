@@ -25,13 +25,19 @@ export function createPruningJob({ dal }) {
 
       // Hard-delete soft-deleted campaigns that exceed retention window
       if (dal.campaigns && dal.campaigns.hardDelete) {
-        const deletedCampaigns = dal.campaigns.listDeleted({ olderThanDays: RETENTION_DAYS.deletedCampaigns });
+        const deletedCampaigns = dal.campaigns.listDeleted({
+          olderThanDays: RETENTION_DAYS.deletedCampaigns,
+        });
         for (const campaign of deletedCampaigns) {
           dal.campaigns.hardDelete(campaign.id);
-          log.info(`[pruning] Hard-deleted soft-deleted campaign ${campaign.id} (deleted at ${campaign.deletedAt})`);
+          log.info(
+            `[pruning] Hard-deleted soft-deleted campaign ${campaign.id} (deleted at ${campaign.deletedAt})`,
+          );
         }
         if (deletedCampaigns.length > 0) {
-          log.info(`[pruning] Hard-deleted ${deletedCampaigns.length} soft-deleted campaigns older than ${RETENTION_DAYS.deletedCampaigns} days`);
+          log.info(
+            `[pruning] Hard-deleted ${deletedCampaigns.length} soft-deleted campaigns older than ${RETENTION_DAYS.deletedCampaigns} days`,
+          );
         }
       }
 

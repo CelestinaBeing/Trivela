@@ -32,9 +32,7 @@ const DEFAULT_BATCH_SIZE = 20;
 export function writeOutbox(db, eventType, payload, opts = {}) {
   const { partitionKey = '', delayMs = 0 } = opts;
   const deliverAfter =
-    delayMs > 0
-      ? new Date(Date.now() + delayMs).toISOString()
-      : new Date().toISOString();
+    delayMs > 0 ? new Date(Date.now() + delayMs).toISOString() : new Date().toISOString();
 
   const stmt = db.prepare(`
     INSERT INTO outbox (event_type, payload, partition_key, deliver_after)
@@ -156,7 +154,10 @@ export class OutboxRelay {
              WHERE id = ?`,
           )
           .run(newAttempts, errMsg, nextDeliver, row.id);
-        this.logger.warn({ id: row.id, attempts: newAttempts, errMsg }, 'outbox delivery retry scheduled');
+        this.logger.warn(
+          { id: row.id, attempts: newAttempts, errMsg },
+          'outbox delivery retry scheduled',
+        );
       }
     }
   }

@@ -14,7 +14,17 @@
  * @property {(...args: any[]) => any} listDeleted
  */
 
-const REQUIRED_METHODS = ['list', 'getById', 'getBySlug', 'create', 'update', 'delete', 'restore', 'hardDelete', 'listDeleted'];
+const REQUIRED_METHODS = [
+  'list',
+  'getById',
+  'getBySlug',
+  'create',
+  'update',
+  'delete',
+  'restore',
+  'hardDelete',
+  'listDeleted',
+];
 
 export function assertCampaignRepository(repository) {
   if (!repository || typeof repository !== 'object') {

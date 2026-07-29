@@ -8,6 +8,9 @@
  * eliminates the "fire-and-forget lost event" failure mode.
  */
 
+export const version = 37;
+export const description = 'Add transactional outbox table for reliable side-effect delivery';
+
 export const up = (db) => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS outbox (

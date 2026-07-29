@@ -291,13 +291,13 @@ groups:
         labels:
           severity: critical
           team: backend
-          financial: "true"
+          financial: 'true'
         annotations:
           summary: 'Trivela contract reserve below liabilities'
           description: >-
-            Solvency ratio is {{ $value | humanize }} (reserve / liabilities < 1).
-            Outstanding redeemable points exceed on-chain reserves. Immediate
-            top-up or redemption freeze required.
+            Solvency ratio is {{ $value | humanize }} (reserve / liabilities < 1). Outstanding
+            redeemable points exceed on-chain reserves. Immediate top-up or redemption freeze
+            required.
           runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#solvency-shortfall'
 
       # Reserve is approaching liabilities (early warning at 110%)
@@ -307,12 +307,12 @@ groups:
         labels:
           severity: warning
           team: backend
-          financial: "true"
+          financial: 'true'
         annotations:
           summary: 'Trivela contract solvency ratio below 110%'
           description: >-
-            Solvency ratio is {{ $value | humanize }} — within 10% of a shortfall.
-            Review reserve levels and consider a top-up before ratio breaches 1.0.
+            Solvency ratio is {{ $value | humanize }} — within 10% of a shortfall. Review reserve
+            levels and consider a top-up before ratio breaches 1.0.
           runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#solvency-shortfall'
 
       # Contract TTL headroom is low (< 50 000 ledgers ≈ 3 days on mainnet)
@@ -325,9 +325,9 @@ groups:
         annotations:
           summary: 'Trivela contract TTL headroom critically low'
           description: >-
-            Only {{ $value | humanize }} ledgers remain before contract instance
-            storage expires (~{{ $value | humanizeDuration }} at 5 s/ledger). Run
-            `bump_ttl` before the contract is archived and state is lost.
+            Only {{ $value | humanize }} ledgers remain before contract instance storage expires
+            (~{{ $value | humanizeDuration }} at 5 s/ledger). Run `bump_ttl` before the contract is
+            archived and state is lost.
           runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#contract-ttl'
 
       # Contract TTL expired — contract may be archived
@@ -340,6 +340,6 @@ groups:
         annotations:
           summary: 'Trivela contract TTL may have expired'
           description: >-
-            The TTL gauge is reporting 0 ledgers remaining. The contract instance
-            may be archived. Verify on-chain state immediately.
+            The TTL gauge is reporting 0 ledgers remaining. The contract instance may be archived.
+            Verify on-chain state immediately.
           runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#contract-ttl'

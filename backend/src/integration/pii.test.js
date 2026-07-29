@@ -49,19 +49,13 @@ async function withSeededDb(fn) {
 
 test('purge-user requires master key', async () => {
   await withSeededDb(async ({ app }) => {
-    await request(app)
-      .post('/api/v1/pii/purge-user')
-      .send({ identifier: 'GABC' })
-      .expect(401);
+    await request(app).post('/api/v1/pii/purge-user').send({ identifier: 'GABC' }).expect(401);
   });
 });
 
 test('export-user requires master key', async () => {
   await withSeededDb(async ({ app }) => {
-    await request(app)
-      .post('/api/v1/pii/export-user')
-      .send({ identifier: 'GABC' })
-      .expect(401);
+    await request(app).post('/api/v1/pii/export-user').send({ identifier: 'GABC' }).expect(401);
   });
 });
 
@@ -191,14 +185,19 @@ test('purge-user and export-user are audit-logged with counts only, never the un
       .expect(200);
 
     const rows = db
-      .prepare("SELECT action, entity, entity_id, diff FROM audit_logs WHERE entity_id = ? ORDER BY id")
+      .prepare(
+        'SELECT action, entity, entity_id, diff FROM audit_logs WHERE entity_id = ? ORDER BY id',
+      )
       .all('GAUDITME');
     assert.equal(rows.length, 2);
     assert.equal(rows[0].action, 'pii_export');
     assert.equal(rows[1].action, 'pii_purge');
     for (const row of rows) {
       assert.equal(row.entity, 'user');
-      assert.ok(!row.diff.includes('+15551234567'), 'audit diff must never contain the raw phone number');
+      assert.ok(
+        !row.diff.includes('+15551234567'),
+        'audit diff must never contain the raw phone number',
+      );
     }
   });
 });
@@ -233,10 +232,7 @@ test('purge-user is idempotent: replaying the same Idempotency-Key returns the c
 
 test('purge-campaign requires master key and validates campaignId', async () => {
   await withSeededDb(async ({ app }) => {
-    await request(app)
-      .post('/api/v1/pii/purge-campaign')
-      .send({ campaignId: '1' })
-      .expect(401);
+    await request(app).post('/api/v1/pii/purge-campaign').send({ campaignId: '1' }).expect(401);
 
     await request(app)
       .post('/api/v1/pii/purge-campaign')

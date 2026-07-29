@@ -54,14 +54,10 @@ export function createStreakRoutes({ streakService, requireApiKey, requireMaster
   });
 
   // DELETE /streaks/:identity — admin-only, resets a user's streak
-  router.delete(
-    '/:identity',
-    ...(requireMasterKey ? [requireMasterKey] : []),
-    (req, res) => {
-      streakService.resetStreak(req.params.identity.trim());
-      return res.status(204).end();
-    },
-  );
+  router.delete('/:identity', ...(requireMasterKey ? [requireMasterKey] : []), (req, res) => {
+    streakService.resetStreak(req.params.identity.trim());
+    return res.status(204).end();
+  });
 
   return router;
 }

@@ -91,7 +91,10 @@ export class CacheService {
     }
 
     for (const key of this.memoryCache.keys()) {
-      if (key === keyOrPattern || (keyOrPattern.includes('*') && this._matchPattern(key, keyOrPattern))) {
+      if (
+        key === keyOrPattern ||
+        (keyOrPattern.includes('*') && this._matchPattern(key, keyOrPattern))
+      ) {
         this.memoryCache.delete(key);
       }
     }

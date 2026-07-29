@@ -64,9 +64,9 @@ export function purgePiiForUser(db, identifier) {
   // Also anonymize analytics events (strip PII from properties)
   try {
     const piiFields = ['wallet_address', 'ip', 'email', 'name', 'address', 'phone'];
-    const events = db.prepare(
-      'SELECT id, properties FROM analytics_events WHERE properties LIKE ?',
-    ).all(`%${identifier}%`);
+    const events = db
+      .prepare('SELECT id, properties FROM analytics_events WHERE properties LIKE ?')
+      .all(`%${identifier}%`);
 
     for (const event of events) {
       try {
@@ -165,7 +165,9 @@ export function purgePiiForCampaign(db, campaignId) {
       const result = stmt.run(Number(campaignId));
       if (result.changes > 0) {
         purged.push({ table, count: result.changes });
-        log.info(`[pii-purge] Deleted ${result.changes} rows from ${table} for campaign ${campaignId}`);
+        log.info(
+          `[pii-purge] Deleted ${result.changes} rows from ${table} for campaign ${campaignId}`,
+        );
       }
     } catch (err) {
       log.warn(`[pii-purge] Failed to purge ${table} for campaign ${campaignId}: ${err.message}`);
