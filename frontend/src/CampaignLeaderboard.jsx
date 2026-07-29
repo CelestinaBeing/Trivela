@@ -349,26 +349,29 @@ export default function CampaignLeaderboard({
                     'aria-rowindex': i + 2,
                     'aria-current': isMyRow(p.walletAddress) ? 'true' : undefined,
                   })}
-                  renderItem={(p) => (
-                    <>
-                      <span className="lb-col-rank" role="cell">
-                        <RankMedal rank={p.rank} />
-                      </span>
-                      <span className="lb-col-address" role="cell" title={p.walletAddress}>
-                        {truncateAddress(p.walletAddress)}
-                        {isMyRow(p.walletAddress) && <span className="lb-you-badge">You</span>}
-                      </span>
-                      <span className="lb-col-points" role="cell">
-                        {(p.points ?? 0).toLocaleString()}
-                      </span>
-                      <span className="lb-col-claimed" role="cell">
-                        {(p.claimedPoints ?? 0).toLocaleString()}
-                      </span>
-                      <span className="lb-col-net" role="cell">
-                        {((p.points ?? 0) - (p.claimedPoints ?? 0)).toLocaleString()}
-                      </span>
-                    </>
-                  )}
+                  renderItem={(p, i) => {
+                    const tied = i > 0 && participants[i - 1]?.rank === p.rank;
+                    return (
+                      <>
+                        <span className="lb-col-rank" role="cell">
+                          <RankMedal rank={p.rank} tied={tied} />
+                        </span>
+                        <span className="lb-col-address" role="cell" title={p.walletAddress}>
+                          {truncateAddress(p.walletAddress)}
+                          {isMyRow(p.walletAddress) && <span className="lb-you-badge">You</span>}
+                        </span>
+                        <span className="lb-col-points" role="cell">
+                          {(p.points ?? 0).toLocaleString()}
+                        </span>
+                        <span className="lb-col-claimed" role="cell">
+                          {(p.claimedPoints ?? 0).toLocaleString()}
+                        </span>
+                        <span className="lb-col-net" role="cell">
+                          {((p.points ?? 0) - (p.claimedPoints ?? 0)).toLocaleString()}
+                        </span>
+                      </>
+                    );
+                  }}
                 />
               )}
             </div>
