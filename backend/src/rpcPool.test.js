@@ -1,6 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRpcPool } from './rpcPool.js';
+import { log } from './middleware/logger.js';
+
+async function withCapturedLog(level, fn) {
+  const captured = [];
+  const original = log[level].bind(log);
+  log[level] = (payload, msg) => {
+    captured.push({ payload, msg });
+  };
+  try {
+    const result = await fn();
+    return { result, captured };
+  } finally {
+    log[level] = original;
+  }
+}
 
 test('getHealthyRpcUrl returns the configured URL for a single-endpoint pool', () => {
   const pool = createRpcPool(['https://rpc1.example.com']);
@@ -204,4 +219,42 @@ test('circuit: window fills gradually — no trip before windowSize reached', ()
   // Fifth error fills the window at 100% — now trips.
   pool.reportOutcome('https://a.com', { success: false });
   assert.equal(pool.getStatus().urls[0].breakerState, 'open');
+});
+
+// ── Structured logging (#925) ───────────────────────────────────────────────
+
+test('logs a structured rpc_pool:saturated line when an acquire() times out', async () => {
+  const pool = createRpcPool(['https://a.com'], { maxConcurrent: 1, acquireTimeoutMs: 20 });
+  await pool.acquire(); // occupy the only slot, never released within the test
+
+  const { captured } = await withCapturedLog('warn', () =>
+    assert.rejects(() => pool.acquire(), pool.PoolSaturatedError),
+  );
+
+  const line = captured.find((l) => l.msg === 'rpc_pool:saturated');
+  assert.ok(line, 'expected an rpc_pool:saturated log line');
+  assert.equal(line.payload.inUse, 1);
+  assert.equal(line.payload.max, 1);
+  assert.ok(line.payload.waitedMs >= 0);
+});
+
+test('logs a structured rpc_pool:breaker_open line with the error rate when the breaker trips', () => {
+  const pool = createRpcPool(['https://a.com'], {
+    circuitBreaker: { windowSize: 2, errorThreshold: 0.5 },
+  });
+
+  const originalWarn = log.warn.bind(log);
+  const captured = [];
+  log.warn = (payload, msg) => captured.push({ payload, msg });
+  try {
+    pool.reportOutcome('https://a.com', { success: false });
+    pool.reportOutcome('https://a.com', { success: false });
+  } finally {
+    log.warn = originalWarn;
+  }
+
+  const line = captured.find((l) => l.msg === 'rpc_pool:breaker_open');
+  assert.ok(line);
+  assert.equal(line.payload.url, 'https://a.com');
+  assert.equal(line.payload.errorRate, 1);
 });
