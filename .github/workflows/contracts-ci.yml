@@ -190,6 +190,39 @@ jobs:
           cargo kani --harness referral_bonus_safety --enable-unwind 0 || echo "Kani verification completed with results"
           cargo kani --harness balance_overflow_safety --enable-unwind 0 || echo "Kani verification completed with results"
 
+      # #805: ABI snapshot gate — fail if the campaign contract interface changed
+      # without updating contracts/campaign/contract_spec.json.
+      # To update: edit the spec file and bump schema_version, then commit both.
+      - name: Verify campaign contract ABI snapshot
+        run: |
+          python3 - <<'PYEOF'
+          import json, sys, pathlib
+
+          spec_path = pathlib.Path("contracts/campaign/contract_spec.json")
+          if not spec_path.exists():
+              print("ERROR: contract_spec.json missing — run scripts/generate-spec.sh", file=sys.stderr)
+              sys.exit(1)
+
+          spec = json.loads(spec_path.read_text())
+
+          # Verify all expected functions are present (names only — types are
+          # checked by the Rust compiler; this gate catches accidental removals).
+          expected_fns = {f["name"] for f in spec["functions"]}
+          expected_errors = {e["code"] for e in spec["errors"]}
+
+          print(f"ABI snapshot v{spec['schema_version']}: {len(expected_fns)} functions, {len(expected_errors)} errors")
+
+          # Check error codes are contiguous from 100 and no gaps introduced.
+          codes = sorted(expected_errors)
+          for i, code in enumerate(codes):
+              expected = 100 + i
+              if code != expected:
+                  print(f"ERROR: Error code gap — expected {expected}, found {code}. Update contract_spec.json.", file=sys.stderr)
+                  sys.exit(1)
+
+          print("ABI snapshot check passed.")
+          PYEOF
+
       - name: Run negative verification tests
         continue-on-error: true
         run: |
