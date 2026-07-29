@@ -1877,3 +1877,110 @@ fn test_sep41_token_mode_disabled_rejects_approve() {
     let result = client.try_sep41_approve(&admin, &spender, &100, &0);
     assert_eq!(result, Err(Ok(Error::TokenModeNotEnabled)));
 }
+
+// ── Timelocked clawback (#729) ────────────────────────────────────────────────
+
+fn setup_clawback() -> (Env, Address, RewardsContractClient<'static>) {
+    let env = Env::default();
+    let contract_id = env.register_contract(None, RewardsContract);
+    let client = RewardsContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &symbol_short!("Trivela"), &symbol_short!("TVL"));
+    env.mock_all_auths();
+    (env, admin, client)
+}
+
+#[test]
+fn test_propose_clawback_returns_id() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &500);
+
+    let id = client.propose_clawback(&admin, &user, &100);
+    assert_eq!(id, 0);
+
+    // Second proposal gets the next id.
+    let id2 = client.propose_clawback(&admin, &user, &50);
+    assert_eq!(id2, 1);
+}
+
+#[test]
+fn test_propose_clawback_rejected_when_overbudget() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &100);
+
+    let result = client.try_propose_clawback(&admin, &user, &200);
+    assert_eq!(result, Err(Ok(Error::ClawbackOverspend)));
+}
+
+#[test]
+fn test_execute_clawback_rejected_before_timelock() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &500);
+
+    let id = client.propose_clawback(&admin, &user, &100);
+
+    // Advance ledger, but not past the full timelock.
+    env.ledger().with_mut(|li| {
+        li.sequence_number += CLAWBACK_TIMELOCK_LEDGERS / 2;
+    });
+
+    let result = client.try_execute_clawback(&admin, &id);
+    assert_eq!(result, Err(Ok(Error::ClawbackTimelocked)));
+}
+
+#[test]
+fn test_execute_clawback_succeeds_after_timelock() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &500);
+
+    let id = client.propose_clawback(&admin, &user, &200);
+
+    env.ledger().with_mut(|li| {
+        li.sequence_number += CLAWBACK_TIMELOCK_LEDGERS;
+    });
+
+    client.execute_clawback(&admin, &id);
+    assert_eq!(client.balance(&user), 300);
+    assert_eq!(client.total_supply(), 300);
+}
+
+#[test]
+fn test_cancel_clawback_prevents_execution() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &500);
+
+    let id = client.propose_clawback(&admin, &user, &100);
+    client.cancel_clawback(&admin, &id);
+
+    env.ledger().with_mut(|li| {
+        li.sequence_number += CLAWBACK_TIMELOCK_LEDGERS;
+    });
+
+    let result = client.try_execute_clawback(&admin, &id);
+    assert_eq!(result, Err(Ok(Error::ClawbackNotFound)));
+    // Balance unchanged.
+    assert_eq!(client.balance(&user), 500);
+}
+
+#[test]
+fn test_execute_clawback_replay_rejected() {
+    let (env, admin, client) = setup_clawback();
+    let user = Address::generate(&env);
+    client.credit(&admin, &user, &500);
+
+    let id = client.propose_clawback(&admin, &user, &100);
+
+    env.ledger().with_mut(|li| {
+        li.sequence_number += CLAWBACK_TIMELOCK_LEDGERS;
+    });
+
+    client.execute_clawback(&admin, &id);
+
+    let replay = client.try_execute_clawback(&admin, &id);
+    assert_eq!(replay, Err(Ok(Error::ClawbackNotFound)));
+}
