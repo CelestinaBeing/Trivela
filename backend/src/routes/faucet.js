@@ -48,7 +48,7 @@ router.post('/fund', faucetLimiter, async (req, res) => {
 
     if (!response.ok) {
       const error = await response.json();
-      log.error('Friendbot request failed', { publicKey, error });
+      log.error({ publicKey, error }, 'Friendbot request failed');
       return res.status(response.status).json({
         error: 'Failed to fund account',
         details: error,
@@ -56,7 +56,7 @@ router.post('/fund', faucetLimiter, async (req, res) => {
     }
 
     const result = await response.json();
-    log.info('Account funded via faucet', { publicKey, hash: result.hash });
+    log.info({ publicKey, hash: result.hash }, 'Account funded via faucet');
 
     res.json({
       success: true,
@@ -73,7 +73,7 @@ router.post('/fund', faucetLimiter, async (req, res) => {
       });
     }
 
-    log.error('Faucet error', { error: error.message });
+    log.error({ error: error.message }, 'Faucet error');
     res.status(500).json({
       error: 'Internal server error',
       message: error.message,

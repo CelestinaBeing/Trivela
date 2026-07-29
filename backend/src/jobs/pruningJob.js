@@ -32,7 +32,7 @@ export function createPruningJob({ dal }) {
 
       log.info('[pruning] Pruning job completed successfully');
     } catch (error) {
-      log.error('[pruning] Job failed:', error);
+      log.error({ err: error }, '[pruning] Job failed');
       throw error;
     }
   };

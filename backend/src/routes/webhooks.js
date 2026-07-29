@@ -58,7 +58,7 @@ router.post('/', async (req, res) => {
 
     webhooks.set(webhookId, webhook);
 
-    log.info('Webhook registered', { webhookId, url: data.url, events: data.events });
+    log.info({ webhookId, url: data.url, events: data.events }, 'Webhook registered');
 
     res.status(201).json({
       id: webhook.id,
@@ -73,7 +73,7 @@ router.post('/', async (req, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Webhook creation error', { error: error.message });
+    log.error({ error: error.message }, 'Webhook creation error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -131,14 +131,14 @@ router.put('/:id', async (req, res) => {
       rest.secret = secret; // Only return secret if rotated
     }
 
-    log.info('Webhook updated', { webhookId: req.params.id });
+    log.info({ webhookId: req.params.id }, 'Webhook updated');
 
     res.json(rest);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: 'Invalid request', details: error.errors });
     }
-    log.error('Webhook update error', { error: error.message });
+    log.error({ error: error.message }, 'Webhook update error');
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -154,7 +154,7 @@ router.delete('/:id', (req, res) => {
   }
 
   webhooks.delete(req.params.id);
-  log.info('Webhook deleted', { webhookId: req.params.id });
+  log.info({ webhookId: req.params.id }, 'Webhook deleted');
 
   res.status(204).send();
 });
@@ -232,16 +232,19 @@ router.post('/:id/deliveries/:deliveryId/replay', async (req, res) => {
       replayDelivery.response = response.ok ? 'Delivered' : await response.text();
       deliveryLogs.set(newDeliveryId, replayDelivery);
 
-      log.info('Webhook replay completed', {
-        webhookId: req.params.id,
-        deliveryId: newDeliveryId,
-        status: replayDelivery.status,
-      });
+      log.info(
+        {
+          webhookId: req.params.id,
+          deliveryId: newDeliveryId,
+          status: replayDelivery.status,
+        },
+        'Webhook replay completed',
+      );
     } catch (error) {
       replayDelivery.status = 'failed';
       replayDelivery.response = error.message;
       deliveryLogs.set(newDeliveryId, replayDelivery);
-      log.error('Webhook replay failed', { error: error.message });
+      log.error({ error: error.message }, 'Webhook replay failed');
     }
   }, 100);
 
@@ -295,14 +298,17 @@ router.post('/:id/test', async (req, res) => {
       payload: testPayload,
     };
 
-    log.info('Webhook test completed', {
-      webhookId: req.params.id,
-      success: result.success,
-    });
+    log.info(
+      {
+        webhookId: req.params.id,
+        success: result.success,
+      },
+      'Webhook test completed',
+    );
 
     res.json(result);
   } catch (error) {
-    log.error('Webhook test failed', { error: error.message });
+    log.error({ error: error.message }, 'Webhook test failed');
     res.status(500).json({
       success: false,
       error: error.message,
