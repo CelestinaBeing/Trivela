@@ -92,6 +92,27 @@ export class WalletManager {
     return this.activeProvider.signTransaction(xdr, options);
   }
 
+  async batchSignTransactions(xdrs, options = {}) {
+    if (!this.activeProvider) {
+      throw new Error('No wallet connected');
+    }
+
+    if (!Array.isArray(xdrs) || xdrs.length === 0) {
+      throw new Error('batchSignTransactions requires a non-empty array of XDRs');
+    }
+
+    if (xdrs.length === 1) {
+      return [await this.activeProvider.signTransaction(xdrs[0], options)];
+    }
+
+    const results = [];
+    for (const xdr of xdrs) {
+      const signed = await this.activeProvider.signTransaction(xdr, options);
+      results.push(signed);
+    }
+    return results;
+  }
+
   async isConnected() {
     if (!this.activeProvider) {
       return false;
@@ -102,5 +123,12 @@ export class WalletManager {
 
   getActiveProviderName() {
     return this.activeProvider ? this.activeProvider.getName() : null;
+  }
+
+  async getNetwork() {
+    if (!this.activeProvider) {
+      return null;
+    }
+    return this.activeProvider.getNetwork();
   }
 }

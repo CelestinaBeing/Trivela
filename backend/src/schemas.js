@@ -1,6 +1,7 @@
 // @ts-check
 import { z } from 'zod';
 import { DEFAULT_CATEGORIES } from './dal/sqliteCampaignRepository.js';
+import { VALID_RATE_TIERS } from './config/rateTiers.js';
 
 const isoDateOrNull = z
   .string()
@@ -28,6 +29,8 @@ export function createCategorySchema(allowedCategories = DEFAULT_CATEGORIES) {
 }
 
 const imageUrlSchema = z.string().url('imageUrl must be a valid URL').optional();
+
+const statusSchema = z.enum(['draft', 'published', 'archived']).optional();
 
 /** Schema for creating a new campaign. */
 export const campaignCreateSchema = z
@@ -61,6 +64,7 @@ export const campaignCreateSchema = z
     imageUrl: imageUrlSchema,
     tags: tagsSchema,
     category: createCategorySchema(),
+    status: statusSchema,
   })
   .refine(
     (data) => {
@@ -108,6 +112,7 @@ export const campaignUpdateSchema = z
     imageUrl: imageUrlSchema,
     tags: tagsSchema,
     category: createCategorySchema(),
+    status: statusSchema,
   })
   .refine(
     (data) => {
@@ -132,13 +137,33 @@ export const listQuerySchema = z
     q: z.string().optional(),
     tags: z.string().optional(),
     category: z.string().optional(),
+    status: z.enum(['draft', 'published', 'archived', 'all']).optional(),
   })
   .passthrough();
+
+/** Valid granular scopes for API keys (#611). */
+export const VALID_API_KEY_SCOPES = /** @type {const} */ ([
+  'campaigns:read',
+  'campaigns:write',
+  'allowlist:write',
+  'admin',
+]);
 
 /** Schema for creating an API key. */
 export const apiKeyCreateSchema = z.object({
   label: z.string().trim().max(128).optional(),
   expiresAt: isoDateOrNull.optional(),
+  orgId: z.string().trim().min(1).max(128).optional(),
+  scopes: z
+    .array(z.enum(VALID_API_KEY_SCOPES))
+    .min(1, 'scopes must contain at least one scope')
+    .optional(),
+  rateTier: z.enum(VALID_RATE_TIERS).optional(),
+});
+
+/** Schema for updating an existing API key's rate tier. */
+export const apiKeyRateTierUpdateSchema = z.object({
+  rateTier: z.enum(VALID_RATE_TIERS),
 });
 
 /** Schema for the indexer cursor update body. */

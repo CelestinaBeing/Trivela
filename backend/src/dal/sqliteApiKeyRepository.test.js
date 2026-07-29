@@ -53,3 +53,48 @@ test('api key repository updates last_used_at on touch', async () => {
   const listed = repository.list();
   assert.ok(listed[0].lastUsedAt);
 });
+
+// ── Rate tiers (#924) ────────────────────────────────────────────────────────
+
+test('api key repository defaults new keys to the standard rate tier', async () => {
+  const repository = await setupRepository();
+  const created = repository.create({ label: 'default-tier' });
+
+  assert.equal(created.key.rateTier, 'standard');
+  assert.equal(repository.getById(created.key.id).rateTier, 'standard');
+  assert.equal(repository.validate(created.rawKey).rateTier, 'standard');
+});
+
+test('api key repository accepts an explicit rate tier at creation', async () => {
+  const repository = await setupRepository();
+  const created = repository.create({ label: 'pro-tier', rateTier: 'pro' });
+
+  assert.equal(created.key.rateTier, 'pro');
+  assert.equal(repository.list()[0].rateTier, 'pro');
+  assert.equal(repository.validate(created.rawKey).rateTier, 'pro');
+});
+
+test('api key repository setRateTier updates an existing key in place', async () => {
+  const repository = await setupRepository();
+  const created = repository.create({ label: 'upgrade-me' });
+  assert.equal(created.key.rateTier, 'standard');
+
+  const updated = repository.setRateTier(created.key.id, 'enterprise');
+  assert.equal(updated.rateTier, 'enterprise');
+  assert.equal(repository.getById(created.key.id).rateTier, 'enterprise');
+  // The raw key keeps working — this is not a rotation.
+  assert.ok(repository.validate(created.rawKey));
+});
+
+test('api key repository setRateTier returns null for an unknown id', async () => {
+  const repository = await setupRepository();
+  assert.equal(repository.setRateTier('does-not-exist', 'pro'), null);
+});
+
+test('api key repository rotate inherits the original rate tier', async () => {
+  const repository = await setupRepository();
+  const created = repository.create({ label: 'rotate-tier', rateTier: 'pro' });
+
+  const rotated = repository.rotate(created.key.id);
+  assert.equal(rotated.key.rateTier, 'pro');
+});

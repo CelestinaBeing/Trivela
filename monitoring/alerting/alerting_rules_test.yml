@@ -138,6 +138,39 @@ tests:
                 the RPC tier.'
               runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#rpc-pool-saturation'
 
+  # ── JobQueueBacklog ─────────────────────────────────────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'trivela_job_queue_depth{job="trivela-backend",queue="durable"}'
+        values: '150+0x15' # steady backlog of 150 pending jobs for 15m
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: JobQueueBacklog
+        exp_alerts:
+          - exp_labels:
+              job: trivela-backend
+              queue: durable
+              severity: warning
+              team: backend
+            exp_annotations:
+              summary: 'Durable job queue backlog is growing'
+              description:
+                '150 jobs pending in the durable queue for over 10 minutes. The poller may be stuck
+                behind a slow handler, or jobs are being enqueued faster than they can drain.'
+              runbook_url: 'https://github.com/FinesseStudioLab/Trivela/blob/main/docs/RUNBOOK.md#job-queue-backlog'
+
+  # ── JobQueueBacklog does NOT fire below threshold ─────────────────────────
+  - interval: 1m
+    input_series:
+      - series: 'trivela_job_queue_depth{job="trivela-backend",queue="durable"}'
+        values: '20+0x15'
+
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: JobQueueBacklog
+        exp_alerts: []
+
   # ── DLQGrowth ───────────────────────────────────────────────────────────────
   - interval: 1m
     input_series:

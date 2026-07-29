@@ -16,7 +16,7 @@
 
 // @ts-check
 import { createRequire } from 'node:module';
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import process from 'node:process';
@@ -44,19 +44,43 @@ function appliedVersions(db) {
 }
 
 /**
+ * Adapts a plain `.sql` migration to the module shape the runner expects.
+ * The version comes from the NNN_ filename prefix; the whole file is executed
+ * as one statement batch inside the same transaction as any `.js` migration.
+ *
+ * @param {string} file
+ */
+async function loadSqlMigration(file) {
+  const version = Number.parseInt(file.slice(0, 3), 10);
+  if (!Number.isInteger(version)) {
+    throw new Error(`SQL migration ${file} must start with a NNN_ version prefix`);
+  }
+
+  const sql = await readFile(join(MIGRATIONS_DIR, file), 'utf8');
+  return {
+    version,
+    description: file,
+    up: (db) => db.exec(sql),
+  };
+}
+
+/**
  * Run all pending migrations against the given database.
  * @param {InstanceType<typeof Database>} db
  * @returns {Promise<{ applied: number[] }>}
  */
 export async function runMigrations(db) {
   const entries = await readdir(MIGRATIONS_DIR);
-  const files = entries.filter((f) => f.endsWith('.js')).sort(); // lexicographic — NNN_ prefix keeps them in order
+  // lexicographic — the NNN_ prefix keeps them in order
+  const files = entries.filter((f) => f.endsWith('.js') || f.endsWith('.sql')).sort();
 
   const applied = appliedVersions(db);
   const ran = [];
 
   for (const file of files) {
-    const mod = await import(pathToFileURL(join(MIGRATIONS_DIR, file)).href);
+    const mod = file.endsWith('.sql')
+      ? await loadSqlMigration(file)
+      : await import(pathToFileURL(join(MIGRATIONS_DIR, file)).href);
 
     if (typeof mod.version !== 'number') {
       throw new Error(`Migration ${file} must export a numeric "version"`);
@@ -65,8 +89,11 @@ export async function runMigrations(db) {
 
     const applyMigration = db.transaction(() => {
       mod.up(db);
+      // INSERT OR IGNORE so that multiple files sharing the same version number (a
+      // pre-existing repo condition) can all run their up() without crashing on the
+      // unique-version constraint.  The first file's description wins in the log.
       db.prepare(
-        'INSERT INTO _schema_migrations (version, description, applied_at) VALUES (?, ?, ?)',
+        'INSERT OR IGNORE INTO _schema_migrations (version, description, applied_at) VALUES (?, ?, ?)',
       ).run(mod.version, mod.description ?? file, new Date().toISOString());
     });
 

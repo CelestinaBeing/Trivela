@@ -19,6 +19,15 @@ function makeDb({ insertChanges = 1 } = {}) {
   };
 }
 
+/**
+ * Writes the projection handlers made, with the `indexed_events` archive row
+ * filtered out. Every ingested event is archived regardless of what its handler
+ * decides to do, so counting raw writes would conflate the two.
+ */
+function projections(db) {
+  return db.calls.filter((call) => !/indexed_events/.test(call.sql));
+}
+
 const REFERRED = (overrides = {}) => ({
   topic: ['referred', 'REFEREE_ADDR', 'REFERRER_ADDR'],
   ledger: 42,
@@ -47,8 +56,9 @@ test('zero bonus records the edge but issues no credit', async () => {
 
   await indexer.processEvent(REFERRED());
 
-  assert.equal(db.calls.length, 1, 'only the referral_credits insert runs');
-  assert.match(db.calls[0].sql, /referral_credits/);
+  const writes = projections(db);
+  assert.equal(writes.length, 1, 'only the referral_credits insert runs');
+  assert.match(writes[0].sql, /referral_credits/);
 });
 
 test('re-indexing the same referral does not double-credit', async () => {
@@ -57,7 +67,7 @@ test('re-indexing the same referral does not double-credit', async () => {
 
   await indexer.processEvent(REFERRED());
 
-  assert.equal(db.calls.length, 1, 'ignored insert short-circuits the credit');
+  assert.equal(projections(db).length, 1, 'ignored insert short-circuits the credit');
 });
 
 test('malformed referred event (missing referrer) is ignored', async () => {
@@ -66,7 +76,7 @@ test('malformed referred event (missing referrer) is ignored', async () => {
 
   await indexer.processEvent(REFERRED({ topic: ['referred', 'REFEREE_ADDR'] }));
 
-  assert.equal(db.calls.length, 0, 'no writes for an incomplete event');
+  assert.equal(projections(db).length, 0, 'no projection for an incomplete event');
 });
 
 // ── Referral bonus instrumentation (issue #656) ──────────────────────────────
@@ -85,10 +95,11 @@ test('refbonus event records a referral_bonus_events row (issue #656)', async ()
 
   await indexer.processEvent(REF_BONUS());
 
-  assert.equal(db.calls.length, 1, 'a single instrumentation insert runs');
-  assert.match(db.calls[0].sql, /referral_bonus_events/);
+  const writes = projections(db);
+  assert.equal(writes.length, 1, 'a single instrumentation insert runs');
+  assert.match(writes[0].sql, /referral_bonus_events/);
   assert.deepEqual(
-    db.calls[0].params.slice(0, 5),
+    writes[0].params.slice(0, 5),
     ['REFERRER_ADDR', 'REFEREE_ADDR', '100', '1000', 7],
     'records referrer, referee, bonus, qualifying amount, ledger',
   );
@@ -110,7 +121,7 @@ test('refbonus event with missing topics is ignored', async () => {
 
   await indexer.processEvent({ topic: ['refbonus'], data: [1, 2] });
 
-  assert.equal(db.calls.length, 0);
+  assert.equal(projections(db).length, 0);
 });
 
 // ── pollWithCursor: backpressure + exactly-once (issue #753) ──────────────────

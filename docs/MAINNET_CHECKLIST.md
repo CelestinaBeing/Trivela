@@ -43,7 +43,7 @@ etc.) before the launch is approved.
 
 - [ ] Mainnet deploy pipeline with approval gates configured — [#289]
 - [ ] Backup strategy for campaign DB documented and tested
-- [ ] Incident response runbook documented
+- [ ] Incident response runbook documented — [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md)
 - [ ] `SECURITY.md` published — [#292]
 
 ---
@@ -51,4 +51,5 @@ etc.) before the launch is approved.
 ## References
 
 - [DEPLOYMENT.md](./DEPLOYMENT.md)
+- [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) - Deploy, verify, monitor, rollback procedures
 - Issues: #278, #279, #280, #281, #282, #283, #284, #286, #288, #289, #290, #292

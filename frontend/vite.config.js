@@ -38,6 +38,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 3_000_000,
+        // Web Push handlers (issue #619) — imported into the generated SW.
+        importScripts: ['push-sw.js'],
         runtimeCaching: [
           {
             urlPattern: ({ request }) =>
@@ -62,6 +64,34 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      // The LedgerHQ libraries are optional: LedgerProvider imports them
+      // dynamically and catches the failure to show "Ledger transport library
+      // is not installed". Leaving them external keeps that contract — the
+      // import fails at runtime and is handled — instead of failing the build
+      // for every user who does not need hardware-wallet support.
+      external: ['@ledgerhq/hw-transport-webusb', '@ledgerhq/hw-app-stellar'],
+      output: {
+        // Vendor code splitting — keeps the initial bundle lean by hoisting
+        // stable third-party packages into separately cacheable chunks.
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-router';
+          }
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('node_modules/@stellar')) {
+            return 'vendor-stellar';
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

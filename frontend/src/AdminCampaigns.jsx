@@ -3,10 +3,15 @@ import { Link } from 'react-router-dom';
 import Header from './components/Header';
 import PageMeta from './components/PageMeta';
 import CreateCampaign from './CreateCampaign';
+import AuditLog from './components/AuditLog';
 import AdminControlPanel from './components/AdminControlPanel';
+import RewardsAdminPanel from './components/RewardsAdminPanel';
 import AllowlistUpload from './components/AllowlistUpload';
+import EmptyState from './components/EmptyState';
+import ErrorBoundary from './ErrorBoundary';
 import { apiClient } from './lib/apiClient';
 import { logSafeEvent } from './lib/safeAnalytics';
+import { useToast } from './lib/toast/ToastProvider';
 import './Landing.css';
 
 export default function AdminCampaigns({
@@ -21,6 +26,7 @@ export default function AdminCampaigns({
   onConnectWallet,
   onDisconnectWallet,
 }) {
+  const toast = useToast();
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,8 +40,10 @@ export default function AdminCampaigns({
       setCampaigns(payload.data || []);
       logSafeEvent('admin_campaigns_loaded', { count: payload.data?.length ?? 0 });
     } catch (fetchError) {
+      const message = fetchError?.message || 'Unable to load campaigns.';
       setCampaigns([]);
-      setError(fetchError?.message || 'Unable to load campaigns.');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -105,6 +113,9 @@ export default function AdminCampaigns({
                   </li>
                 ))}
               </ul>
+              <Link to="/admin/analytics" className="btn btn-primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
+                Operator Analytics Dashboard
+              </Link>
             </section>
           ) : null}
           {/* #294 — Merkle allowlist generator. Computes the tree
@@ -141,20 +152,39 @@ export default function AdminCampaigns({
                     ))}
                 </select>
                 {campaigns.filter((c) => c.contractId).length === 0 && (
-                  <small className="campaign-selector-hint">
-                    No campaigns with contract IDs found. Create a campaign with a contract ID
-                    first.
-                  </small>
+                  <EmptyState
+                    eyebrow="On-chain controls"
+                    title="No campaigns with contract IDs"
+                    description="Create a campaign with a contract ID first to manage it on-chain."
+                  />
                 )}
               </div>
 
               {selectedCampaignId && (
-                <AdminControlPanel
-                  contractId={campaigns.find((c) => c.id === selectedCampaignId)?.contractId}
-                />
+                <ErrorBoundary as="div">
+                  <AdminControlPanel
+                    contractId={campaigns.find((c) => c.id === selectedCampaignId)?.contractId}
+                  />
+                </ErrorBoundary>
               )}
             </section>
           )}
+
+          <section className="section admin-rewards-section">
+            <div className="admin-control-header">
+              <h3 className="section-title">Rewards Contract Management</h3>
+              <p className="section-subtitle">
+                Manage rewards contract settings including pause controls, rate limits, reserves, and multisig.
+              </p>
+            </div>
+            <ErrorBoundary as="div">
+              <RewardsAdminPanel />
+            </ErrorBoundary>
+          </section>
+        </section>
+
+        <section className="section" style={{ marginTop: 0, paddingTop: 0 }}>
+          <AuditLog />
         </section>
       </main>
     </div>

@@ -86,7 +86,17 @@ function parseTagsFromRow(row) {
   }
 }
 
+function parseTranslationsFromRow(row) {
+  try {
+    const parsed = JSON.parse(row.translations ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function rowToCampaign(row) {
+  const rawTranslations = parseTranslationsFromRow(row);
   const campaign = {
     id: String(row.id),
     name: row.name,
@@ -104,10 +114,14 @@ function rowToCampaign(row) {
     imageUrl: row.image_url ?? null,
     tags: parseTagsFromRow(row),
     category: row.category ?? null,
+    status: row.status ?? 'draft',
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
+    deletedAt: row.deleted_at ?? null,
+    available_locales: Object.keys(rawTranslations),
+    _rawTranslations: rawTranslations,
   };
-  campaign.status = computeCampaignStatus(campaign);
+  campaign.computedStatus = computeCampaignStatus(campaign);
   return campaign;
 }
 
@@ -121,8 +135,11 @@ export function createSqliteCampaignRepository({
   if (seed.length > 0) {
     const count = db.prepare('SELECT COUNT(*) AS n FROM campaigns').get().n;
     if (count === 0) {
+      // `status` must be written explicitly: the column (migration 009)
+      // defaults to 'draft', and list() only returns 'published' rows, so
+      // omitting it seeded campaigns that nothing could ever list.
       const insert = db.prepare(
-        'INSERT INTO campaigns (name, slug, description, active, featured, reward_per_action, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO campaigns (name, slug, description, active, featured, reward_per_action, start_date, end_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       );
       const insertMany = db.transaction((rows) => {
         for (const row of rows) {
@@ -136,6 +153,7 @@ export function createSqliteCampaignRepository({
             row.rewardPerAction ?? 0,
             row.startDate ?? null,
             row.endDate ?? null,
+            row.status ?? 'published',
             createdAt,
             row.updatedAt ?? createdAt,
           );
@@ -154,15 +172,21 @@ export function createSqliteCampaignRepository({
    *   tags?: string[],
    *   category?: string,
    *   includeHidden?: boolean,
+   *   includeDeleted?: boolean,
+   *   status?: 'draft' | 'published' | 'archived' | 'all',
    *   sort?: string,
    *   order?: 'asc' | 'desc'
    * }} [opts]
    */
-  function list({ active, q, tags, category, includeHidden = false, sort, order } = {}) {
+  function list({ active, q, tags, category, includeHidden = false, includeDeleted = false, status, sort, order } = {}) {
     const where = [];
     const params = [];
     const hasQuery = typeof q === 'string' && q.length > 0;
     const useFts = hasQuery && ftsAvailable;
+
+    if (!includeDeleted) {
+      where.push('campaigns.deleted_at IS NULL');
+    }
 
     if (!includeHidden) {
       where.push('campaigns.hidden = 0');
@@ -171,6 +195,13 @@ export function createSqliteCampaignRepository({
     if (active !== undefined) {
       where.push('campaigns.active = ?');
       params.push(active ? 1 : 0);
+    }
+
+    if (status && status !== 'all') {
+      where.push('campaigns.status = ?');
+      params.push(status);
+    } else if (!status) {
+      where.push("campaigns.status = 'published'");
     }
 
     if (category) {
@@ -225,7 +256,7 @@ export function createSqliteCampaignRepository({
         `
       SELECT category AS name, COUNT(*) AS count
       FROM campaigns
-      WHERE category IS NOT NULL AND category != '' AND hidden = 0
+      WHERE category IS NOT NULL AND category != '' AND hidden = 0 AND deleted_at IS NULL
       GROUP BY category
       ORDER BY count DESC, category ASC
     `,
@@ -239,7 +270,7 @@ export function createSqliteCampaignRepository({
         `
       SELECT lower(json_each.value) AS name, COUNT(*) AS count
       FROM campaigns, json_each(campaigns.tags)
-      WHERE campaigns.hidden = 0
+      WHERE campaigns.hidden = 0 AND campaigns.deleted_at IS NULL
       GROUP BY lower(json_each.value)
       ORDER BY count DESC, name ASC
       LIMIT ?
@@ -248,13 +279,15 @@ export function createSqliteCampaignRepository({
       .all(limit);
   }
 
-  function getById(id) {
-    const row = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(Number(id));
+  function getById(id, { includeDeleted = false } = {}) {
+    const where = includeDeleted ? 'id = ?' : 'id = ? AND deleted_at IS NULL';
+    const row = db.prepare(`SELECT * FROM campaigns WHERE ${where}`).get(Number(id));
     return row ? rowToCampaign(row) : undefined;
   }
 
-  function getBySlug(slug) {
-    const row = db.prepare('SELECT * FROM campaigns WHERE slug = ?').get(slug);
+  function getBySlug(slug, { includeDeleted = false } = {}) {
+    const where = includeDeleted ? 'slug = ?' : 'slug = ? AND deleted_at IS NULL';
+    const row = db.prepare(`SELECT * FROM campaigns WHERE ${where}`).get(slug);
     return row ? rowToCampaign(row) : undefined;
   }
 
@@ -274,6 +307,7 @@ export function createSqliteCampaignRepository({
     imageUrl = null,
     tags = [],
     category = null,
+    status = 'draft',
   }) {
     const normalizedTags = normalizeTags(tags);
     validateTags(normalizedTags);
@@ -286,8 +320,8 @@ export function createSqliteCampaignRepository({
         `INSERT INTO campaigns (
           name, slug, description, active, reward_per_action, referral_bonus_points,
           start_date, end_date, featured, hidden, hidden_reason, contract_id,
-          image_url, tags, category, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          image_url, tags, category, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         name,
@@ -305,6 +339,7 @@ export function createSqliteCampaignRepository({
         imageUrl,
         JSON.stringify(normalizedTags),
         category,
+        status,
         createdAt,
         createdAt,
       );
@@ -328,6 +363,7 @@ export function createSqliteCampaignRepository({
       'imageUrl',
       'tags',
       'category',
+      'status',
     ];
     const columnMap = {
       name: 'name',
@@ -344,6 +380,7 @@ export function createSqliteCampaignRepository({
       imageUrl: 'image_url',
       tags: 'tags',
       category: 'category',
+      status: 'status',
     };
     const booleanFields = new Set(['active', 'featured', 'hidden']);
     const sets = [];
@@ -379,8 +416,38 @@ export function createSqliteCampaignRepository({
   }
 
   function remove(id) {
+    const campaign = getById(id);
+    if (!campaign) return false;
+    const deletedAt = new Date().toISOString();
+    const info = db.prepare('UPDATE campaigns SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL').run(deletedAt, deletedAt, Number(id));
+    return info.changes > 0;
+  }
+
+  function restore(id) {
+    const row = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    if (!row) return undefined;
+    const updatedAt = new Date().toISOString();
+    db.prepare('UPDATE campaigns SET deleted_at = NULL, updated_at = ? WHERE id = ?').run(updatedAt, Number(id));
+    return getById(id);
+  }
+
+  function hardDelete(id) {
+    const row = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(Number(id));
+    if (!row) return false;
     const info = db.prepare('DELETE FROM campaigns WHERE id = ?').run(Number(id));
     return info.changes > 0;
+  }
+
+  /**
+   * @param {{ limit?: number, olderThanDays?: number }} [opts]
+   */
+  function listDeleted({ limit = 100, olderThanDays } = {}) {
+    const where = ['deleted_at IS NOT NULL'];
+    const params = [];
+    if (olderThanDays) {
+      where.push(`deleted_at < datetime('now', '-${olderThanDays} days')`);
+    }
+    return db.prepare(`SELECT * FROM campaigns WHERE ${where.join(' AND ')} ORDER BY deleted_at ASC LIMIT ?`).all(...params, limit).map(rowToCampaign);
   }
 
   function clone(id, overrides = {}) {
@@ -428,6 +495,117 @@ export function createSqliteCampaignRepository({
     return newCampaign;
   }
 
+  /**
+   * Publish a campaign (draft → published)
+   * Validates required fields before publishing
+   */
+  function publish(id) {
+    const deletedCampaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    if (deletedCampaign) {
+      throw new Error('Cannot publish a deleted campaign');
+    }
+
+    const campaign = getById(id);
+    if (!campaign) {
+      throw new Error('Campaign not found');
+    }
+
+    if (campaign.status === 'published') {
+      return campaign; // Already published, idempotent
+    }
+
+    if (campaign.status === 'archived') {
+      throw new Error('Cannot publish an archived campaign. Only forward transitions are allowed.');
+    }
+
+    // Validate required fields for publishing
+    if (!campaign.name || campaign.name.trim() === '') {
+      throw new Error('Campaign name is required to publish');
+    }
+
+    if (!campaign.contractId) {
+      throw new Error('Contract ID is required to publish');
+    }
+
+    const updatedAt = new Date().toISOString();
+    db.prepare(`UPDATE campaigns SET status = 'published', updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      Number(id),
+    );
+    return getById(id);
+  }
+
+  /**
+   * Archive a campaign (published → archived)
+   * Can only archive published campaigns
+   */
+  function archive(id) {
+    const deletedCampaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    if (deletedCampaign) {
+      throw new Error('Cannot archive a deleted campaign');
+    }
+
+    const campaign = getById(id);
+    if (!campaign) {
+      throw new Error('Campaign not found');
+    }
+
+    if (campaign.status === 'archived') {
+      return campaign; // Already archived, idempotent
+    }
+
+    if (campaign.status === 'draft') {
+      throw new Error('Cannot archive a draft campaign. Publish it first.');
+    }
+
+    const updatedAt = new Date().toISOString();
+    db.prepare(`UPDATE campaigns SET status = 'archived', updated_at = ? WHERE id = ?`).run(
+      updatedAt,
+      Number(id),
+    );
+    return getById(id);
+  }
+
+  /** @param {string | number} id @returns {Record<string, { name?: string, description?: string }>} */
+  function getTranslations(id) {
+    const row = db.prepare('SELECT translations FROM campaigns WHERE id = ?').get(Number(id));
+    if (!row) return {};
+    return parseTranslationsFromRow(row);
+  }
+
+  /**
+   * @param {string | number} id
+   * @param {string} locale
+   * @param {{ name?: string, description?: string }} data
+   */
+  function upsertTranslation(id, locale, data) {
+    const current = getTranslations(id);
+    const updated = { ...current, [locale]: { ...data } };
+    const updatedAt = new Date().toISOString();
+    db.prepare('UPDATE campaigns SET translations = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(updated),
+      updatedAt,
+      Number(id),
+    );
+  }
+
+  /**
+   * @param {string | number} id
+   * @param {string} locale
+   */
+  function deleteTranslation(id, locale) {
+    const current = getTranslations(id);
+    if (!(locale in current)) return false;
+    const { [locale]: _removed, ...rest } = current;
+    const updatedAt = new Date().toISOString();
+    db.prepare('UPDATE campaigns SET translations = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(rest),
+      updatedAt,
+      Number(id),
+    );
+    return true;
+  }
+
   return {
     list,
     listCategories,
@@ -437,7 +615,15 @@ export function createSqliteCampaignRepository({
     create,
     update,
     delete: remove,
+    restore,
+    hardDelete,
+    listDeleted,
     clone,
+    publish,
+    archive,
+    getTranslations,
+    upsertTranslation,
+    deleteTranslation,
     ftsAvailable,
   };
 }

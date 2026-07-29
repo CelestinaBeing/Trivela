@@ -1,3 +1,5 @@
+import { getRequestId, runWithRequestId } from '../lib/requestContext.js';
+
 function computeBackoffMs({ attempt, baseDelayMs, maxDelayMs }) {
   const jitter = Math.floor(Math.random() * 250);
   const delay = baseDelayMs * 2 ** Math.max(0, attempt - 1);
@@ -9,6 +11,8 @@ export function createJobRunner({
   logger = console,
   timeProvider = { now: () => Date.now() },
   deadLetter,
+  lockProvider,
+  lockMissDelayMs = 5_000,
   defaultMaxAttempts = 5,
   defaultBaseDelayMs = 1_000,
   defaultMaxDelayMs = 30_000,
@@ -36,8 +40,8 @@ export function createJobRunner({
   function recordDeadLetter(job, error) {
     if (!deadLetter || typeof deadLetter.record !== 'function') {
       logger.error?.(
-        `job:dead_letter type=${job.type} attempts=${job.attempt} (no persistent store configured)`,
-        error,
+        { type: job.type, attempts: job.attempt, err: error },
+        'job:dead_letter (no persistent store configured)',
       );
       return;
     }
@@ -56,37 +60,55 @@ export function createJobRunner({
       });
     } catch (storeError) {
       logger.error?.(
-        `job:dead_letter_store_failed type=${job.type} reason=${storeError?.message ?? storeError}`,
+        { type: job.type, err: storeError },
+        'job:dead_letter_store_failed',
       );
     }
   }
 
-  async function runNext() {
-    if (stopped || running) return;
-    if (queue.length === 0) return;
-
-    sortQueue();
-    const job = queue.shift();
+  /** The actual per-job work, run inside the job's correlation context (#925). */
+  async function processJob(job) {
     const handler = handlers[job.type];
 
     if (!handler) {
-      logger.warn?.(`job:drop type=${job.type} reason=no_handler`);
+      logger.warn?.({ type: job.type }, 'job:drop reason=no_handler');
       scheduleNext();
       return;
+    }
+
+    // Acquire distributed lock before marking running. If the lock is held by
+    // another instance, requeue without consuming an attempt and return early
+    // so `running` is never set to true.
+    let lock = null;
+    if (lockProvider) {
+      try {
+        lock = await lockProvider.acquire(job.type);
+      } catch (lockErr) {
+        logger.warn?.({ type: job.type, err: lockErr }, 'job:lock_error');
+      }
+      if (lock === null) {
+        queue.push({ ...job, runAt: timeProvider.now() + lockMissDelayMs });
+        logger.info?.({ type: job.type, requeueInMs: lockMissDelayMs }, 'job:lock_miss');
+        scheduleNext();
+        return;
+      }
     }
 
     running = true;
     const startedAt = timeProvider.now();
 
     try {
-      logger.info?.(`job:start type=${job.type} attempt=${job.attempt}`);
+      logger.info?.({ type: job.type, attempt: job.attempt }, 'job:start');
       await handler(job.payload);
-      logger.info?.(`job:success type=${job.type} duration_ms=${timeProvider.now() - startedAt}`);
+      logger.info?.(
+        { type: job.type, durationMs: timeProvider.now() - startedAt },
+        'job:success',
+      );
     } catch (error) {
       const attemptsRemaining = job.maxAttempts - job.attempt;
       logger.warn?.(
-        `job:fail type=${job.type} attempt=${job.attempt} remaining=${attemptsRemaining}`,
-        error,
+        { type: job.type, attempt: job.attempt, remaining: attemptsRemaining, err: error },
+        'job:fail',
       );
 
       if (job.attempt < job.maxAttempts) {
@@ -100,14 +122,31 @@ export function createJobRunner({
           attempt: job.attempt + 1,
           runAt: timeProvider.now() + backoffMs,
         });
-        logger.info?.(`job:retry type=${job.type} in_ms=${backoffMs}`);
+        logger.info?.({ type: job.type, inMs: backoffMs }, 'job:retry');
       } else {
         recordDeadLetter(job, error);
       }
     } finally {
+      if (lockProvider && lock !== null) {
+        await lockProvider
+          .release(job.type, lock)
+          .catch((err) => logger.warn?.({ type: job.type, err }, 'job:lock_release_failed'));
+      }
       running = false;
       scheduleNext();
     }
+  }
+
+  async function runNext() {
+    if (stopped || running) return;
+    if (queue.length === 0) return;
+
+    sortQueue();
+    const job = queue.shift();
+    // Re-establish the enqueuing request's correlation ID (or mint a fresh
+    // one, e.g. for cron-triggered jobs) so every log line for this job run
+    // — including ones from deep inside the handler — carries it (#925).
+    return runWithRequestId(job.requestId, () => processJob(job));
   }
 
   function enqueue(
@@ -131,6 +170,9 @@ export function createJobRunner({
       maxDelayMs,
       runAt,
       enqueuedAt: timeProvider.now(),
+      // Captured from the enqueuing call's context (#925) — null if enqueue()
+      // was called outside any tracked context (e.g. an interval timer).
+      requestId: getRequestId(),
     });
     scheduleNext();
   }
@@ -144,9 +186,18 @@ export function createJobRunner({
 
   scheduleNext();
 
+  /**
+   * Queue depth snapshot for monitoring (#930): jobs waiting in-memory plus
+   * whether the runner is currently executing one.
+   */
+  function getStatus() {
+    return { queued: queue.length, running: running ? 1 : 0 };
+  }
+
   return {
     enqueue,
     stop,
+    getStatus,
     // Exposed so callers (e.g. an admin "retry from dead-letter" endpoint)
     // can rebuild a job after an operator reviews it.
     _computeBackoffMs: computeBackoffMs,

@@ -60,6 +60,84 @@ test('GET /api/v1 exposes versioning details and legacy compatibility guidance',
   }
 });
 
+// ── Correlation IDs (#925) ───────────────────────────────────────────────────
+
+test('every response includes a generated X-Request-Id header', async () => {
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1`);
+    const requestId = response.headers.get('x-request-id');
+    assert.ok(requestId, 'X-Request-Id header should be present');
+    assert.match(requestId, /^[0-9a-f-]{36}$/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test('a client-supplied X-Request-Id header is echoed back unchanged', async () => {
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1`, {
+      headers: { 'X-Request-Id': 'client-supplied-correlation-id' },
+    });
+    assert.equal(response.headers.get('x-request-id'), 'client-supplied-correlation-id');
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test('two separate requests get distinct generated X-Request-Id values', async () => {
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const [a, b] = await Promise.all([fetch(`${baseUrl}/api/v1`), fetch(`${baseUrl}/api/v1`)]);
+    assert.notEqual(a.headers.get('x-request-id'), b.headers.get('x-request-id'));
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test('X-Request-Id is exposed to cross-origin JS clients via CORS', async () => {
+  const { server, baseUrl } = await startTestServer({
+    corsAllowedOrigins: 'https://app.example.com',
+  });
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1`, {
+      headers: { Origin: 'https://app.example.com' },
+    });
+    const exposed = response.headers.get('access-control-expose-headers') ?? '';
+    assert.match(exposed, /X-Request-Id/i);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test('the access-log line for a request carries the same X-Request-Id returned to the client', async () => {
+  const { server, baseUrl } = await startTestServer();
+  const { log } = await import('./middleware/logger.js');
+  const captured = [];
+  const originalInfo = log.info.bind(log);
+  log.info = (payload) => {
+    captured.push(payload);
+    originalInfo(payload);
+  };
+
+  try {
+    const response = await fetch(`${baseUrl}/api/v1`);
+    const requestId = response.headers.get('x-request-id');
+
+    const accessLogLine = captured.find((entry) => entry.path === '/api/v1');
+    assert.ok(accessLogLine, 'expected an access-log entry for the request');
+    assert.equal(accessLogLine.requestId, requestId);
+  } finally {
+    log.info = originalInfo;
+    await stopTestServer(server);
+  }
+});
+
 test('GET /api/v1/campaigns returns paginated campaign data with the expected shape', async () => {
   const { server, baseUrl } = await startTestServer();
 
@@ -442,6 +520,25 @@ test('GET /metrics exposes minimal Prometheus metrics', async () => {
     assert.match(body, /trivela_request_errors_total \d+/);
     assert.match(body, /trivela_process_uptime_seconds [0-9.]+/);
     assert.match(body, /trivela_route_hits_total\{route="GET \/api\/v1\/campaigns"\} \d+/);
+  } finally {
+    await stopTestServer(server);
+  }
+});
+
+test('GET /metrics exposes job queue depth and DLQ size (#930)', async () => {
+  const { server, baseUrl } = await startTestServer();
+
+  try {
+    const response = await fetch(`${baseUrl}/metrics`);
+    assert.equal(response.status, 200);
+
+    const body = await response.text();
+    assert.match(body, /trivela_job_queue_depth\{queue="in_memory"\} \d+/);
+    assert.match(body, /trivela_job_queue_depth\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_job_queue_running\{queue="in_memory"\} \d+/);
+    assert.match(body, /trivela_job_queue_running\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_job_queue_dead_total\{queue="durable"\} \d+/);
+    assert.match(body, /trivela_dlq_size_total \d+/);
   } finally {
     await stopTestServer(server);
   }
