@@ -22,6 +22,7 @@ import { createRateLimiter, createRedisStore } from './middleware/rateLimit.js';
 import { createAuthLockout } from './middleware/authLockout.js';
 import requestLogger, { log } from './middleware/logger.js';
 import requestId from './middleware/requestId.js';
+import { requestContextMiddleware } from './middleware/requestContext.js';
 import securityHeaders from './middleware/securityHeaders.js';
 import errorHandler from './middleware/errorHandler.js';
 import { paginateItems } from './pagination.js';
@@ -218,8 +219,10 @@ function createCorsOptions(allowedOrigins) {
     // #288 — accept `traceparent` from instrumented frontends and
     // expose it on responses so the browser can stitch its own
     // spans into the same OpenTelemetry trace.
-    allowedHeaders: ['Content-Type', 'X-API-Key', 'Authorization', 'traceparent'],
-    exposedHeaders: ['traceparent'],
+    // #925 — same treatment for X-Request-Id so JS clients can read the
+    // correlation ID of a response (and optionally supply their own).
+    allowedHeaders: ['Content-Type', 'X-API-Key', 'Authorization', 'traceparent', 'X-Request-Id'],
+    exposedHeaders: ['traceparent', 'X-Request-Id'],
   };
 
   if (allowedOrigins.includes('*')) {
@@ -595,6 +598,11 @@ export async function createApp(options = {}) {
   });
 
   app.use(requestId);
+  // Must run immediately after requestId (#925) so every downstream
+  // middleware/route/job/RPC call started from this request can read its
+  // correlation ID via requestContext's getRequestId() without threading it
+  // through explicit parameters.
+  app.use(requestContextMiddleware);
   app.use(compression({ threshold: 1024 }));
   app.use(cors(createCorsOptions(allowedOrigins)));
   app.use(securityHeaders);
