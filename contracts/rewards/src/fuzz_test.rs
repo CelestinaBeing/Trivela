@@ -381,6 +381,173 @@ proptest! {
     }
 }
 
+// ── Global accounting invariant (issue #801) ─────────────────────────────────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+
+    /// **Invariant**: sum(all_user_balances) == total_credited - total_claimed
+    ///
+    /// This is the fundamental on-chain accounting identity. Any sequence of
+    /// credit and claim operations across any number of users must preserve it.
+    /// A violation means points were created or destroyed without a corresponding
+    /// ledger entry.
+    #[test]
+    fn fuzz_global_balance_accounting_invariant(
+        num_users in 2usize..=5usize,
+        rounds in 1usize..=8usize,
+    ) {
+        extern crate alloc;
+        use alloc::vec::Vec;
+        let (env, _contract_id, client) = setup_fuzz();
+        let admin = Address::generate(&env);
+        let creditor = Address::generate(&env);
+
+        client.initialize(&admin, &symbol_short!("TEST"), &symbol_short!("TST"));
+        env.mock_all_auths();
+
+        let users: Vec<Address> = (0..num_users).map(|_| Address::generate(&env)).collect();
+
+        let mut total_credited: u64 = 0;
+        let mut total_claimed: u64 = 0;
+
+        for _ in 0..rounds {
+            for user in &users {
+                let credit_amount = 200u64;
+                if client.try_credit(&creditor, user, &credit_amount).is_ok() {
+                    total_credited = total_credited.saturating_add(credit_amount);
+                }
+                // Claim one quarter of available balance each round.
+                let bal = client.balance(user);
+                let claim_amount = bal / 4;
+                if claim_amount > 0 {
+                    if client.try_claim(user, &claim_amount).is_ok() {
+                        total_claimed = total_claimed.saturating_add(claim_amount);
+                    }
+                }
+            }
+        }
+
+        // Core invariant: sum of individual balances == total_credited - total_claimed.
+        let sum_balances: u64 = users.iter().map(|u| client.balance(u)).sum();
+        let expected = total_credited.saturating_sub(total_claimed);
+        prop_assert_eq!(
+            sum_balances,
+            expected,
+            "Global accounting violated: sum(balances)={} credited={} claimed={}",
+            sum_balances,
+            total_credited,
+            total_claimed
+        );
+
+        // total_claimed must also match the contract's own global counter.
+        prop_assert_eq!(
+            client.total_claimed(),
+            total_claimed,
+            "total_claimed() mismatch: contract={} expected={}",
+            client.total_claimed(),
+            total_claimed
+        );
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(50))]
+
+    /// **Invariant**: no user balance ever goes negative.
+    ///
+    /// Claim operations that would take the balance below zero must be rejected
+    /// (Error::InsufficientBalance) and leave the balance unchanged.
+    #[test]
+    fn fuzz_no_negative_balances(
+        credit_amount in 1u64..=1_000u64,
+        over_claim_extra in 1u64..=1_000u64,
+    ) {
+        let (env, _contract_id, client) = setup_fuzz();
+        let admin = Address::generate(&env);
+        let user = Address::generate(&env);
+        let creditor = Address::generate(&env);
+
+        client.initialize(&admin, &symbol_short!("TEST"), &symbol_short!("TST"));
+        env.mock_all_auths();
+
+        client.credit(&creditor, &user, &credit_amount);
+        let balance_before = client.balance(&user);
+
+        // Attempt to claim more than the available balance.
+        let over_claim = credit_amount.saturating_add(over_claim_extra);
+        let result = client.try_claim(&user, &over_claim);
+        prop_assert!(result.is_err(), "over-claim should fail");
+
+        // Balance must be unchanged after a rejected claim.
+        prop_assert_eq!(
+            client.balance(&user),
+            balance_before,
+            "balance changed after rejected claim"
+        );
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(40))]
+
+    /// **Invariant**: batch_credit preserves the per-user and global accounting
+    /// identity across randomized recipient sets.
+    ///
+    /// After `batch_credit`, each recipient's balance must increase by exactly
+    /// their allocated amount and the sum of all increases must equal the sum
+    /// of the batch amounts.
+    #[test]
+    fn fuzz_batch_credit_accounting(
+        n_users in 2usize..=6usize,
+        amount_each in 1u64..=500u64,
+    ) {
+        extern crate alloc;
+        use alloc::vec::Vec as StdVec;
+        let (env, _contract_id, client) = setup_fuzz();
+        let admin = Address::generate(&env);
+        let creditor = Address::generate(&env);
+
+        client.initialize(&admin, &symbol_short!("TEST"), &symbol_short!("TST"));
+        env.mock_all_auths();
+
+        let users: StdVec<Address> = (0..n_users).map(|_| Address::generate(&env)).collect();
+        let balances_before: StdVec<u64> = users.iter().map(|u| client.balance(u)).collect();
+
+        let mut sdk_recipients: soroban_sdk::Vec<(Address, u64)> =
+            soroban_sdk::Vec::new(&env);
+        for user in &users {
+            sdk_recipients.push_back((user.clone(), amount_each));
+        }
+
+        let batch_result = client.try_batch_credit(&creditor, &sdk_recipients);
+
+        if batch_result.is_ok() {
+            let mut total_delta: u64 = 0;
+            for (user, &bal_before) in users.iter().zip(balances_before.iter()) {
+                let bal_after = client.balance(user);
+                let delta = bal_after.saturating_sub(bal_before);
+                prop_assert_eq!(
+                    delta,
+                    amount_each,
+                    "user balance delta {} != allocated amount {}",
+                    delta,
+                    amount_each
+                );
+                total_delta = total_delta.saturating_add(delta);
+            }
+            let expected_total = amount_each.saturating_mul(n_users as u64);
+            prop_assert_eq!(
+                total_delta,
+                expected_total,
+                "sum of balance deltas {} != sum of batch amounts {}",
+                total_delta,
+                expected_total
+            );
+        }
+    }
+}
+
 // ── Integration: random operation sequences ──────────────────────────────────
 
 proptest! {
