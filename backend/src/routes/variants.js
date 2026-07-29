@@ -14,8 +14,9 @@ import {
  * @param {ReturnType<import('../dal/sqliteVariantRepository.js').createSqliteVariantRepository>} deps.variantRepo
  * @param {ReturnType<import('../services/variantService.js').createVariantService>} deps.variantService
  * @param {ReturnType<import('../dal/sqliteCampaignRepository.js').createSqliteCampaignRepository>} deps.campaignRepo
+ * @param {(req: import('express').Request, entry: { action: string, entity: string, entityId: string, diff: unknown }) => void} deps.recordAuditEntry
  */
-export function createVariantRoutes({ variantRepo, variantService, campaignRepo }) {
+export function createVariantRoutes({ variantRepo, variantService, campaignRepo, recordAuditEntry }) {
   const router = express.Router();
 
   // Create a new variant for a campaign
@@ -58,6 +59,13 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
         isControl: data.isControl,
         active: data.active,
         config: data.config,
+      });
+
+      recordAuditEntry(req, {
+        action: 'create',
+        entity: 'variant',
+        entityId: variant.id,
+        diff: { campaignId, variantKey: data.variantKey, name: data.name, trafficWeight: data.trafficWeight, isControl: data.isControl, active: data.active },
       });
 
       res.status(201).json(variant);
@@ -143,6 +151,13 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       const updated = variantRepo.updateVariant(variantId, validation.data);
 
+      recordAuditEntry(req, {
+        action: 'update',
+        entity: 'variant',
+        entityId: variantId,
+        diff: validation.data,
+      });
+
       res.json(updated);
     } catch (error) {
       console.error('Error updating variant:', error);
@@ -167,6 +182,12 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
       const deleted = variantRepo.deleteVariant(variantId);
 
       if (deleted) {
+        recordAuditEntry(req, {
+          action: 'delete',
+          entity: 'variant',
+          entityId: variantId,
+          diff: null,
+        });
         res.status(204).send();
       } else {
         res.status(500).json({ error: 'Failed to delete variant' });
