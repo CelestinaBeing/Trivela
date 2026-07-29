@@ -1463,6 +1463,84 @@ fn test_activity_log_view_returns_empty_on_init() {
     assert_eq!(log.len(), 0);
 }
 
+// ── #743: Referral loop prevention and sybil guard ───────────────────────────
+
+#[test]
+fn test_referral_direct_loop_rejected() {
+    let (env, _contract_id, client) = setup();
+    let admin = Address::generate(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+    let (leaf, proof) = no_proof_args(&env);
+
+    // Alice registers with Bob as referrer (Bob must register first).
+    assert!(client.register(&bob, &leaf, &proof, &None, &None));
+    assert!(client.register(&alice, &leaf, &proof, &None, &Some(bob.clone())));
+    assert_eq!(client.referrer_of(&alice), Some(bob.clone()));
+    assert_eq!(client.referral_count(&bob), 1);
+
+    // Bob now tries to cite Alice as his referrer — direct loop A→B→A.
+    // Alice's REFERRAL_LOCK already points to Bob, so this must fail.
+    assert_eq!(
+        client.try_register(&bob, &leaf, &proof, &None, &Some(alice.clone())),
+        Err(Ok(Error::ReferralLoop))
+    );
+    // Bob's referral count must not have changed.
+    assert_eq!(client.referral_count(&bob), 1);
+    assert_eq!(client.referral_count(&alice), 0);
+}
+
+#[test]
+fn test_referral_count_not_inflated_by_re_register() {
+    let (env, _contract_id, client) = setup();
+    let admin = Address::generate(&env);
+    let referrer = Address::generate(&env);
+    let participant = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+    let (leaf, proof) = no_proof_args(&env);
+
+    // First registration: referrer gets credit.
+    assert!(client.register(&referrer, &leaf, &proof, &None, &None));
+    assert!(client.register(&participant, &leaf, &proof, &None, &Some(referrer.clone())));
+    assert_eq!(client.referral_count(&referrer), 1);
+
+    // Deregister participant, then re-register with the same referrer.
+    assert!(client.admin_deregister(&admin, &0, &participant));
+    assert!(!client.is_participant(&participant));
+
+    assert!(client.register(&participant, &leaf, &proof, &None, &Some(referrer.clone())));
+    assert!(client.is_participant(&participant));
+    // Referrer count must still be 1 — not incremented again.
+    assert_eq!(client.referral_count(&referrer), 1);
+}
+
+#[test]
+fn test_referral_lock_prevents_referrer_swap_on_re_register() {
+    let (env, _contract_id, client) = setup();
+    let admin = Address::generate(&env);
+    let referrer_a = Address::generate(&env);
+    let referrer_b = Address::generate(&env);
+    let participant = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+    let (leaf, proof) = no_proof_args(&env);
+
+    assert!(client.register(&referrer_a, &leaf, &proof, &None, &None));
+    assert!(client.register(&referrer_b, &leaf, &proof, &None, &None));
+    assert!(client.register(&participant, &leaf, &proof, &None, &Some(referrer_a.clone())));
+    assert_eq!(client.referral_count(&referrer_a), 1);
+    assert_eq!(client.referral_count(&referrer_b), 0);
+
+    // Deregister, then try to re-register citing a different referrer.
+    assert!(client.admin_deregister(&admin, &0, &participant));
+    assert!(client.register(&participant, &leaf, &proof, &None, &Some(referrer_b.clone())));
+
+    // referrer_b must NOT receive a credit; referrer_a still at 1.
+    assert_eq!(client.referral_count(&referrer_a), 1);
+    assert_eq!(client.referral_count(&referrer_b), 0);
 // ── Referral loop detection + sybil guard (#743) ─────────────────────────────
 
 #[test]
