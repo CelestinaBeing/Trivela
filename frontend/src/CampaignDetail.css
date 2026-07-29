@@ -338,7 +338,6 @@
 
 .referral-leaderboard-link {
   display: inline-block;
-  margin-bottom: 1rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent);
@@ -346,6 +345,17 @@
 
 .referral-leaderboard-link:hover {
   text-decoration: underline;
+}
+
+.referral-actions-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.referral-manage-link {
+  text-decoration: none;
 }
 
 .referral-link-row {
