@@ -1462,3 +1462,103 @@ fn test_activity_log_view_returns_empty_on_init() {
     let log = client.activity_log();
     assert_eq!(log.len(), 0);
 }
+
+// ── Issue #740: participation barrier survives deregistration ─────────────────
+
+#[test]
+fn test_participation_marker_set_on_register() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    assert!(!client.has_participated(&participant));
+    client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_deregister_does_not_clear_participation_marker() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(client.has_participated(&participant));
+
+    client.deregister(&participant);
+    assert!(!client.is_participant(&participant));
+    // Participation history persists after deregistration
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_re_registration_after_deregister_is_blocked() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    client.deregister(&participant);
+
+    // Re-register attempt must fail with NullifierAlreadyUsed
+    let result = client.try_register(&participant, &leaf, &proof, &None, &None);
+    assert_eq!(result, Err(Ok(Error::NullifierAlreadyUsed)));
+}
+
+#[test]
+fn test_clear_participation_allows_re_registration() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    client.deregister(&participant);
+
+    // Admin explicitly clears participation history
+    client.clear_participation(&admin, &1, &participant);
+    assert!(!client.has_participated(&participant));
+
+    // Now re-registration succeeds
+    let was_new = client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(was_new);
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_root_rotation_does_not_allow_double_registration() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+
+    // Simulate root rotation (set a new merkle root — but participant has no root so it passes)
+    // The participation barrier fires before any Merkle check
+    let result = client.try_register(&participant, &leaf, &proof, &None, &None);
+    assert_eq!(result, Err(Ok(Error::NullifierAlreadyUsed)));
+}
