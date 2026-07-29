@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createJobRunner, computeBackoffMs } from './jobRunner.js';
+import { getRequestId, runWithRequestId } from '../lib/requestContext.js';
 
 /**
  * Minimal logger that swallows output but lets tests inspect counts.
@@ -201,4 +202,112 @@ test('jobRunner uses environment-driven defaults when enqueue omits options', as
 
   assert.equal(attempts, 2, 'runner should respect defaultMaxAttempts');
   assert.equal(observedMaxAttempts, 2);
+});
+
+// ── Correlation ID propagation (#925) ───────────────────────────────────────
+
+test('a job enqueued from within a request context runs with that same requestId', async () => {
+  let observed;
+  const runner = createJobRunner({
+    handlers: {
+      correlated: async () => {
+        observed = getRequestId();
+      },
+    },
+    logger: silentLogger(),
+  });
+
+  runWithRequestId('req-from-handler', () => {
+    runner.enqueue('correlated', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+  });
+
+  const deadline = Date.now() + 500;
+  while (observed === undefined && Date.now() < deadline) {
+    await tick(5);
+  }
+  runner.stop();
+
+  assert.equal(observed, 'req-from-handler');
+});
+
+test('a job enqueued outside any request context still gets a correlation ID at run time', async () => {
+  let observed;
+  const runner = createJobRunner({
+    handlers: {
+      uncorrelated: async () => {
+        observed = getRequestId();
+      },
+    },
+    logger: silentLogger(),
+  });
+
+  // No runWithRequestId wrapper — mirrors a cron-triggered enqueue().
+  runner.enqueue('uncorrelated', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+
+  const deadline = Date.now() + 500;
+  while (observed === undefined && Date.now() < deadline) {
+    await tick(5);
+  }
+  runner.stop();
+
+  assert.ok(observed, 'a fallback correlation ID should have been minted for the job run');
+  assert.match(observed, /^[0-9a-f-]{36}$/);
+});
+
+test('the correlation ID is preserved across retries of the same job', async () => {
+  const seen = [];
+  const runner = createJobRunner({
+    handlers: {
+      flaky: async () => {
+        seen.push(getRequestId());
+        if (seen.length < 2) throw new Error('transient');
+      },
+    },
+    logger: silentLogger(),
+  });
+
+  runWithRequestId('req-retry', () => {
+    runner.enqueue('flaky', null, { maxAttempts: 3, baseDelayMs: 1, maxDelayMs: 5 });
+  });
+
+  const deadline = Date.now() + 1_000;
+  while (seen.length < 2 && Date.now() < deadline) {
+    await tick(5);
+  }
+  runner.stop();
+
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0], 'req-retry');
+  assert.equal(seen[1], 'req-retry');
+});
+
+test('two concurrently enqueued jobs from different requests do not cross-contaminate their correlation IDs', async () => {
+  const observed = {};
+  const runner = createJobRunner({
+    handlers: {
+      tagA: async () => {
+        observed.a = getRequestId();
+      },
+      tagB: async () => {
+        observed.b = getRequestId();
+      },
+    },
+    logger: silentLogger(),
+  });
+
+  runWithRequestId('req-a', () => {
+    runner.enqueue('tagA', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+  });
+  runWithRequestId('req-b', () => {
+    runner.enqueue('tagB', null, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 5 });
+  });
+
+  const deadline = Date.now() + 500;
+  while ((!observed.a || !observed.b) && Date.now() < deadline) {
+    await tick(5);
+  }
+  runner.stop();
+
+  assert.equal(observed.a, 'req-a');
+  assert.equal(observed.b, 'req-b');
 });

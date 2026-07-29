@@ -27,6 +27,7 @@ function rowToJob(row) {
     visibleAt: /** @type {string} */ (row.visible_at),
     enqueuedAt: /** @type {string} */ (row.enqueued_at),
     errorMessage: row.error_message ?? null,
+    requestId: /** @type {string | null} */ (row.request_id ?? null),
   };
 }
 
@@ -41,8 +42,8 @@ export function createSqliteJobQueueRepository({ db }) {
   const insertStmt = db.prepare(`
     INSERT INTO job_queue
       (id, type, payload, status, attempts, max_attempts, base_delay_ms, max_delay_ms,
-       run_at, visible_at, enqueued_at)
-    VALUES (?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?, ?)
+       run_at, visible_at, enqueued_at, request_id)
+    VALUES (?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const selectPendingStmt = db.prepare(`
@@ -109,6 +110,7 @@ export function createSqliteJobQueueRepository({ db }) {
    *   runAt?: string,
    *   visibleAt?: string,
    *   enqueuedAt?: string,
+   *   requestId?: string | null,
    * }} job
    */
   function enqueue(job) {
@@ -127,6 +129,7 @@ export function createSqliteJobQueueRepository({ db }) {
       runAt,
       job.visibleAt ?? runAt,
       job.enqueuedAt ?? now,
+      job.requestId ?? null,
     );
     return id;
   }
