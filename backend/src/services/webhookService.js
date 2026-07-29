@@ -9,6 +9,8 @@ const WEBHOOK_EVENTS = {
   CAMPAIGN_CREATED: 'campaign.created',
   CAMPAIGN_UPDATED: 'campaign.updated',
   CAMPAIGN_DELETED: 'campaign.deleted',
+  CAMPAIGN_RESTORED: 'campaign.restored',
+  CAMPAIGN_PURGED: 'campaign.purged',
   CAMPAIGN_ACTIVATED: 'campaign.activated',
   CAMPAIGN_DEACTIVATED: 'campaign.deactivated',
 };

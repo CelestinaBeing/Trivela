@@ -51,7 +51,7 @@ function readProvidedKey(req) {
  * @param {{
  *   apiKeys?: string | string[],
  *   apiKeyRepository?: {
- *     validate: (rawKey: string) => { id: string, label: string, orgId?: string | null, scopes?: string[] } | null,
+ *     validate: (rawKey: string) => { id: string, label: string, orgId?: string | null, scopes?: string[], rateTier?: string } | null,
  *     touchLastUsed: (id: string) => void,
  *     hasActiveKeys?: () => boolean,
  *   } | null,
@@ -72,6 +72,15 @@ export default function createApiKeyAuth({
     const authRequired = allowedKeySet.size > 0 || Boolean(apiKeyRepository?.hasActiveKeys?.());
 
     if (!authRequired) {
+      // No keys configured — the deployment has opted out of auth entirely.
+      // Say so explicitly rather than leaving req.auth unset: the downstream
+      // scope (#611) and role guards reject a request with no auth object at
+      // all, so an implicit pass here turned every write into a 403.
+      req.auth = {
+        type: 'unauthenticated',
+        source: 'unconfigured',
+        orgRole: 'owner',
+      };
       return next();
     }
 
@@ -104,6 +113,7 @@ export default function createApiKeyAuth({
           orgId: match.orgId ?? membership?.orgId ?? null,
           orgRole: membership?.role ?? null,
           scopes: match.scopes ?? null,
+          rateTier: match.rateTier ?? null,
         };
         return next();
       }

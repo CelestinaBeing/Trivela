@@ -1,5 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+
+const stub = (name) => fileURLToPath(new URL(`./src/mocks/${name}`, import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
@@ -7,6 +10,14 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.js'],
+    // The LedgerHQ libraries are optional at runtime (LedgerProvider imports
+    // them dynamically and degrades when missing), so they are not installed.
+    // Alias them to local stubs so the specifiers resolve under Vite's import
+    // analysis; the tests still replace the behaviour with vi.mock().
+    alias: {
+      '@ledgerhq/hw-transport-webusb': stub('ledgerhq-hw-transport-webusb.js'),
+      '@ledgerhq/hw-app-stellar': stub('ledgerhq-hw-app-stellar.js'),
+    },
     include: ['src/**/*.test.{js,jsx,ts,tsx}', 'src/__tests__/**/*.{test,spec}.{js,jsx,ts,tsx}'],
     coverage: {
       provider: 'v8',

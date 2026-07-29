@@ -150,6 +150,74 @@ test('rateLimit forwards store errors via next(err) instead of crashing the requ
   assert.equal(res.statusCode, 200, 'must not 429 on store failure');
 });
 
+// ── Per-request tier override (#924) ────────────────────────────────────────
+
+test('rateLimit uses resolveLimits() to override the static limit per request', async () => {
+  const limiter = createRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 5,
+    resolveLimits: (req) => (req.headers['x-api-key'] === 'pro-key' ? { maxRequests: 300 } : null),
+  });
+
+  const proReq = makeReqRes({ apiKey: 'pro-key' });
+  await limiter(proReq.req, proReq.res, () => {});
+  assert.equal(proReq.res.headersOut['X-RateLimit-Limit'], '300');
+  assert.equal(proReq.res.headersOut['X-RateLimit-Remaining'], '299');
+
+  const standardReq = makeReqRes({ apiKey: 'standard-key' });
+  await limiter(standardReq.req, standardReq.res, () => {});
+  assert.equal(standardReq.res.headersOut['X-RateLimit-Limit'], '5');
+});
+
+test('rateLimit resolveLimits can override windowMs too, and falls back to defaults when it returns null', async () => {
+  const limiter = createRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 1,
+    resolveLimits: (req) =>
+      req.headers['x-api-key'] === 'enterprise-key'
+        ? { maxRequests: 1000, windowMs: 1_000 }
+        : null,
+  });
+
+  const entReq = makeReqRes({ apiKey: 'enterprise-key' });
+  await limiter(entReq.req, entReq.res, () => {});
+  assert.equal(entReq.res.headersOut['RateLimit-Policy'], '1000;w=1');
+
+  // A request with no matching key still gets the static default (1 req/min).
+  const anonReq = makeReqRes({ ip: '9.9.9.9' });
+  await limiter(anonReq.req, anonReq.res, () => {});
+  assert.equal(anonReq.res.statusCode, 200);
+  assert.equal(anonReq.res.headersOut['X-RateLimit-Limit'], '1');
+});
+
+test('rateLimit enterprise tier allows more requests than a tier resolving to the static default', async () => {
+  const store = createMemoryStore();
+  const limiter = createRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 2,
+    store,
+    resolveLimits: (req) =>
+      req.headers['x-api-key'] === 'enterprise-key' ? { maxRequests: 5, windowMs: 60_000 } : null,
+  });
+
+  // Standard key trips the limit at request 3.
+  for (let i = 0; i < 2; i += 1) {
+    const { req, res } = makeReqRes({ apiKey: 'standard-key' });
+    await limiter(req, res, () => {});
+    assert.equal(res.statusCode, 200);
+  }
+  const standardThird = makeReqRes({ apiKey: 'standard-key' });
+  await limiter(standardThird.req, standardThird.res, () => {});
+  assert.equal(standardThird.res.statusCode, 429);
+
+  // Enterprise key keeps succeeding past that same request count.
+  for (let i = 0; i < 3; i += 1) {
+    const { req, res } = makeReqRes({ apiKey: 'enterprise-key' });
+    await limiter(req, res, () => {});
+    assert.equal(res.statusCode, 200, `enterprise request ${i + 1} should succeed`);
+  }
+});
+
 // ── Redis-store integration ─────────────────────────────────────────────────
 
 function makeFakeRedis() {

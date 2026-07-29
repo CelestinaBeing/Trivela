@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiUrl } from './config';
 import Header from './components/Header';
 import VirtualizedList from './components/VirtualizedList';
+import EmptyState from './components/EmptyState';
 import './CampaignLeaderboard.css';
 
 const PAGE_LIMIT = 20;
@@ -325,15 +326,15 @@ export default function CampaignLeaderboard({
                   </button>
                 </div>
               ) : participants.length === 0 ? (
-                <div className="lb-state lb-empty">
-                  <p className="lb-empty-icon">🏁</p>
-                  <p className="lb-empty-heading">No participants yet</p>
-                  <p className="lb-empty-sub">
-                    {debouncedSearch
+                <EmptyState
+                  eyebrow="Leaderboard"
+                  title="🏁 No participants yet"
+                  description={
+                    debouncedSearch
                       ? 'No participants match that wallet address.'
-                      : 'Be the first to join this campaign and top the leaderboard!'}
-                  </p>
-                </div>
+                      : 'Be the first to join this campaign and top the leaderboard!'
+                  }
+                />
               ) : (
                 <VirtualizedList
                   items={participants}
@@ -348,26 +349,29 @@ export default function CampaignLeaderboard({
                     'aria-rowindex': i + 2,
                     'aria-current': isMyRow(p.walletAddress) ? 'true' : undefined,
                   })}
-                  renderItem={(p) => (
-                    <>
-                      <span className="lb-col-rank" role="cell">
-                        <RankMedal rank={p.rank} />
-                      </span>
-                      <span className="lb-col-address" role="cell" title={p.walletAddress}>
-                        {truncateAddress(p.walletAddress)}
-                        {isMyRow(p.walletAddress) && <span className="lb-you-badge">You</span>}
-                      </span>
-                      <span className="lb-col-points" role="cell">
-                        {(p.points ?? 0).toLocaleString()}
-                      </span>
-                      <span className="lb-col-claimed" role="cell">
-                        {(p.claimedPoints ?? 0).toLocaleString()}
-                      </span>
-                      <span className="lb-col-net" role="cell">
-                        {((p.points ?? 0) - (p.claimedPoints ?? 0)).toLocaleString()}
-                      </span>
-                    </>
-                  )}
+                  renderItem={(p, i) => {
+                    const tied = i > 0 && participants[i - 1]?.rank === p.rank;
+                    return (
+                      <>
+                        <span className="lb-col-rank" role="cell">
+                          <RankMedal rank={p.rank} tied={tied} />
+                        </span>
+                        <span className="lb-col-address" role="cell" title={p.walletAddress}>
+                          {truncateAddress(p.walletAddress)}
+                          {isMyRow(p.walletAddress) && <span className="lb-you-badge">You</span>}
+                        </span>
+                        <span className="lb-col-points" role="cell">
+                          {(p.points ?? 0).toLocaleString()}
+                        </span>
+                        <span className="lb-col-claimed" role="cell">
+                          {(p.claimedPoints ?? 0).toLocaleString()}
+                        </span>
+                        <span className="lb-col-net" role="cell">
+                          {((p.points ?? 0) - (p.claimedPoints ?? 0)).toLocaleString()}
+                        </span>
+                      </>
+                    );
+                  }}
                 />
               )}
             </div>

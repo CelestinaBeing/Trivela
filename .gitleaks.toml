@@ -56,12 +56,19 @@ paths = [
   '''\.md$''',
   # Unit/integration test files — fixture credentials, not real secrets.
   '''\.(test|spec)\.(js|jsx|ts|tsx)$''',
+  # Same for the Python SDK's pytest suite (test_*.py / *_test.py).
+  '''(^|/)test_[^/]*\.py$''',
+  '''_test\.py$''',
+  # Rust unit/integration tests.
+  '''(^|/)tests?/.*\.rs$''',
   # Developer-portal route renders example curl snippets in its HTML.
   '''backend/src/routes/devPortal\.js''',
   # Build / vendor output (never present in CI checkout; keeps local scans clean).
   '''(^|/)target/''',
   '''(^|/)dist/''',
   '''(^|/)node_modules/''',
+  '''(^|/)storybook-static/''',
+  '''(^|/)coverage/''',
 ]
 regexes = [
   # Obvious placeholder tokens used throughout examples.

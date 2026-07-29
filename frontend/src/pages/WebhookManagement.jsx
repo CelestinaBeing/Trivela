@@ -98,7 +98,14 @@ function DeliveryHistory({ webhookId, apiKey, onClose }) {
           boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 16,
+          }}
+        >
           <h3 style={{ margin: 0 }}>Delivery History</h3>
           <button
             onClick={onClose}
@@ -116,7 +123,12 @@ function DeliveryHistory({ webhookId, apiKey, onClose }) {
         {!loading && deliveries.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+              <tr
+                style={{
+                  textAlign: 'left',
+                  borderBottom: '1px solid var(--color-border, #e5e7eb)',
+                }}
+              >
                 <th style={{ padding: '6px 8px' }}>Event</th>
                 <th style={{ padding: '6px 8px' }}>Status</th>
                 <th style={{ padding: '6px 8px' }}>Attempts</th>
@@ -127,16 +139,22 @@ function DeliveryHistory({ webhookId, apiKey, onClose }) {
             </thead>
             <tbody>
               {deliveries.map((d) => (
-                <tr
-                  key={d.id}
-                  style={{ borderBottom: '1px solid var(--color-border, #f3f4f6)' }}
-                >
+                <tr key={d.id} style={{ borderBottom: '1px solid var(--color-border, #f3f4f6)' }}>
                   <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{d.event}</td>
                   <td style={{ padding: '6px 8px' }}>
                     <StatusBadge code={d.statusCode} />
                   </td>
                   <td style={{ padding: '6px 8px' }}>{d.attempts}</td>
-                  <td style={{ padding: '6px 8px', color: 'var(--color-muted, #666)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td
+                    style={{
+                      padding: '6px 8px',
+                      color: 'var(--color-muted, #666)',
+                      maxWidth: 200,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     {d.error || '—'}
                   </td>
                   <td style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>
@@ -179,9 +197,7 @@ function WebhookForm({ initial, onSave, onCancel }) {
   const [error, setError] = useState('');
 
   function toggleEvent(evt) {
-    setEvents((prev) =>
-      prev.includes(evt) ? prev.filter((e) => e !== evt) : [...prev, evt],
-    );
+    setEvents((prev) => (prev.includes(evt) ? prev.filter((e) => e !== evt) : [...prev, evt]));
   }
 
   async function handleSubmit(e) {
@@ -209,7 +225,13 @@ function WebhookForm({ initial, onSave, onCancel }) {
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/webhook"
           required
-          style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', boxSizing: 'border-box' }}
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            borderRadius: 4,
+            border: '1px solid var(--color-border, #d1d5db)',
+            boxSizing: 'border-box',
+          }}
         />
       </div>
       <div>
@@ -219,14 +241,29 @@ function WebhookForm({ initial, onSave, onCancel }) {
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"
-          style={{ width: '100%', padding: '6px 10px', borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', boxSizing: 'border-box' }}
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            borderRadius: 4,
+            border: '1px solid var(--color-border, #d1d5db)',
+            boxSizing: 'border-box',
+          }}
         />
       </div>
       <div>
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Events</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {SUPPORTED_EVENTS.map((evt) => (
-            <label key={evt} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 13 }}>
+            <label
+              key={evt}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                cursor: 'pointer',
+                fontSize: 13,
+              }}
+            >
               <input
                 type="checkbox"
                 checked={events.includes(evt)}
@@ -248,14 +285,28 @@ function WebhookForm({ initial, onSave, onCancel }) {
         <button
           type="submit"
           disabled={saving}
-          style={{ padding: '8px 16px', borderRadius: 4, background: 'var(--color-primary, #3b82f6)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 4,
+            background: 'var(--color-primary, #3b82f6)',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 500,
+          }}
         >
           {saving ? 'Saving…' : initial ? 'Update' : 'Create'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          style={{ padding: '8px 16px', borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', background: 'none', cursor: 'pointer' }}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 4,
+            border: '1px solid var(--color-border, #d1d5db)',
+            background: 'none',
+            cursor: 'pointer',
+          }}
         >
           Cancel
         </button>
@@ -336,7 +387,15 @@ export default function WebhookManagement() {
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
       <h2 style={{ marginTop: 0 }}>Webhook Management</h2>
 
-      <div style={{ marginBottom: 20, padding: 16, border: '1px solid var(--color-border, #e5e7eb)', borderRadius: 8, background: 'var(--color-surface-secondary, #f9fafb)' }}>
+      <div
+        style={{
+          marginBottom: 20,
+          padding: 16,
+          border: '1px solid var(--color-border, #e5e7eb)',
+          borderRadius: 8,
+          background: 'var(--color-surface-secondary, #f9fafb)',
+        }}
+      >
         <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>API Key</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
@@ -344,11 +403,22 @@ export default function WebhookManagement() {
             value={apiKey}
             onChange={(e) => saveApiKey(e.target.value)}
             placeholder="Enter your API key"
-            style={{ flex: 1, padding: '6px 10px', borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)' }}
+            style={{
+              flex: 1,
+              padding: '6px 10px',
+              borderRadius: 4,
+              border: '1px solid var(--color-border, #d1d5db)',
+            }}
           />
           <button
             onClick={load}
-            style={{ padding: '6px 14px', borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', background: 'none', cursor: 'pointer' }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: 4,
+              border: '1px solid var(--color-border, #d1d5db)',
+              background: 'none',
+              cursor: 'pointer',
+            }}
           >
             Load
           </button>
@@ -356,14 +426,34 @@ export default function WebhookManagement() {
       </div>
 
       {newSecret && (
-        <div style={{ padding: 16, marginBottom: 16, background: '#d1fae5', borderRadius: 8, border: '1px solid #6ee7b7' }}>
-          <strong>Webhook created.</strong> Copy your signing secret now — it won&apos;t be shown again.
-          <div style={{ fontFamily: 'monospace', marginTop: 8, wordBreak: 'break-all', fontSize: 13 }}>
+        <div
+          style={{
+            padding: 16,
+            marginBottom: 16,
+            background: '#d1fae5',
+            borderRadius: 8,
+            border: '1px solid #6ee7b7',
+          }}
+        >
+          <strong>Webhook created.</strong> Copy your signing secret now — it won&apos;t be shown
+          again.
+          <div
+            style={{ fontFamily: 'monospace', marginTop: 8, wordBreak: 'break-all', fontSize: 13 }}
+          >
             {newSecret.secret}
           </div>
           <button
             onClick={() => setNewSecret(null)}
-            style={{ marginTop: 8, padding: '4px 12px', borderRadius: 4, border: 'none', cursor: 'pointer', background: '#059669', color: '#fff', fontSize: 12 }}
+            style={{
+              marginTop: 8,
+              padding: '4px 12px',
+              borderRadius: 4,
+              border: 'none',
+              cursor: 'pointer',
+              background: '#059669',
+              color: '#fff',
+              fontSize: 12,
+            }}
           >
             Dismiss
           </button>
@@ -375,14 +465,30 @@ export default function WebhookManagement() {
       {!showCreate && (
         <button
           onClick={() => setShowCreate(true)}
-          style={{ marginBottom: 20, padding: '8px 16px', borderRadius: 4, background: 'var(--color-primary, #3b82f6)', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 500 }}
+          style={{
+            marginBottom: 20,
+            padding: '8px 16px',
+            borderRadius: 4,
+            background: 'var(--color-primary, #3b82f6)',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 500,
+          }}
         >
           + New Webhook
         </button>
       )}
 
       {showCreate && (
-        <div style={{ marginBottom: 20, padding: 16, border: '1px solid var(--color-border, #e5e7eb)', borderRadius: 8 }}>
+        <div
+          style={{
+            marginBottom: 20,
+            padding: 16,
+            border: '1px solid var(--color-border, #e5e7eb)',
+            borderRadius: 8,
+          }}
+        >
           <h3 style={{ marginTop: 0 }}>New Webhook</h3>
           <WebhookForm onSave={handleCreate} onCancel={() => setShowCreate(false)} />
         </div>
@@ -401,7 +507,9 @@ export default function WebhookManagement() {
               border: '1px solid var(--color-border, #e5e7eb)',
               borderRadius: 8,
               padding: 16,
-              background: wh.active ? 'var(--color-surface, #fff)' : 'var(--color-surface-secondary, #f9fafb)',
+              background: wh.active
+                ? 'var(--color-surface, #fff)'
+                : 'var(--color-surface-secondary, #f9fafb)',
             }}
           >
             {editingId === wh.id ? (
@@ -415,13 +523,30 @@ export default function WebhookManagement() {
               </>
             ) : (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: 12,
+                  }}
+                >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
                       {wh.url}
                     </div>
                     {wh.description && (
-                      <div style={{ fontSize: 13, color: 'var(--color-muted, #666)', marginTop: 2 }}>
+                      <div
+                        style={{ fontSize: 13, color: 'var(--color-muted, #666)', marginTop: 2 }}
+                      >
                         {wh.description}
                       </div>
                     )}
@@ -441,48 +566,92 @@ export default function WebhookManagement() {
                       {(wh.events || []).map((evt) => (
                         <span
                           key={evt}
-                          style={{ fontSize: 11, padding: '2px 6px', borderRadius: 4, background: 'var(--color-surface-secondary, #f3f4f6)', fontFamily: 'monospace' }}
+                          style={{
+                            fontSize: 11,
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            background: 'var(--color-surface-secondary, #f3f4f6)',
+                            fontFamily: 'monospace',
+                          }}
                         >
                           {evt}
                         </span>
                       ))}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--color-muted, #9ca3af)', marginTop: 6 }}>
+                    <div
+                      style={{ fontSize: 12, color: 'var(--color-muted, #9ca3af)', marginTop: 6 }}
+                    >
                       Created {formatDate(wh.createdAt)}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => setHistoryWebhookId(wh.id)}
-                      style={{ padding: '5px 10px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', background: 'none', cursor: 'pointer' }}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: '1px solid var(--color-border, #d1d5db)',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
                     >
                       Deliveries
                     </button>
                     <select
                       value={testEvent}
                       onChange={(e) => setTestEvent(e.target.value)}
-                      style={{ fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', padding: '4px 6px' }}
+                      style={{
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: '1px solid var(--color-border, #d1d5db)',
+                        padding: '4px 6px',
+                      }}
                     >
                       {SUPPORTED_EVENTS.map((e) => (
-                        <option key={e} value={e}>{e}</option>
+                        <option key={e} value={e}>
+                          {e}
+                        </option>
                       ))}
                     </select>
                     <button
                       onClick={() => handleTest(wh.id)}
                       disabled={testingId === wh.id}
-                      style={{ padding: '5px 10px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', background: 'none', cursor: 'pointer' }}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: '1px solid var(--color-border, #d1d5db)',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
                     >
                       {testingId === wh.id ? 'Sending…' : 'Test'}
                     </button>
                     <button
                       onClick={() => setEditingId(wh.id)}
-                      style={{ padding: '5px 10px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border, #d1d5db)', background: 'none', cursor: 'pointer' }}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: '1px solid var(--color-border, #d1d5db)',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(wh.id)}
-                      style={{ padding: '5px 10px', fontSize: 12, borderRadius: 4, border: '1px solid #fca5a5', color: '#dc2626', background: 'none', cursor: 'pointer' }}
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: 12,
+                        borderRadius: 4,
+                        border: '1px solid #fca5a5',
+                        color: '#dc2626',
+                        background: 'none',
+                        cursor: 'pointer',
+                      }}
                     >
                       Delete
                     </button>

@@ -1,3 +1,5 @@
+import { log } from './middleware/logger.js';
+
 const DEFAULT_BACKOFF_MS = 30_000;
 const DEFAULT_MAX_CONCURRENT = 10;
 const DEFAULT_ACQUIRE_TIMEOUT_MS = 5_000;
@@ -167,6 +169,10 @@ export function createRpcPool(
       const timer = setTimeout(() => {
         const idx = _waiters.indexOf(waiter);
         if (idx !== -1) _waiters.splice(idx, 1);
+        log.warn(
+          { waitedMs: Date.now() - startedAt, inUse: _inUse, max: maxConcurrent },
+          'rpc_pool:saturated',
+        );
         reject(new PoolSaturatedError(acquireTimeoutMs));
       }, acquireTimeoutMs);
 
@@ -176,7 +182,6 @@ export function createRpcPool(
         resolve(getHealthyRpcUrl());
       }
 
-      void startedAt; // suppress lint
       _waiters.push(waiter);
     });
   }
@@ -213,10 +218,12 @@ export function createRpcPool(
         ep.breakerState = BREAKER_CLOSED;
         ep.openSince = null;
         ep.window = [];
+        log.info({ url, latencyMs }, 'rpc_pool:breaker_closed');
       } else {
         // Probe failed — reopen immediately.
         ep.breakerState = BREAKER_OPEN;
         ep.openSince = Date.now();
+        log.warn({ url, success, latencyMs }, 'rpc_pool:breaker_reopened');
       }
       return;
     }
@@ -234,6 +241,7 @@ export function createRpcPool(
         ep.breakerState = BREAKER_OPEN;
         ep.openSince = Date.now();
         ep.window = [];
+        log.warn({ url, errorRate: errorCount / windowSize, windowSize }, 'rpc_pool:breaker_open');
       }
     }
   }
@@ -248,6 +256,7 @@ export function createRpcPool(
     if (ep && ep.healthy) {
       ep.healthy = false;
       ep.unhealthySince = Date.now();
+      log.warn({ url }, 'rpc_pool:endpoint_unhealthy');
     }
   }
 
@@ -259,12 +268,14 @@ export function createRpcPool(
   function markHealthy(url) {
     const ep = endpoints.find((e) => e.url === url);
     if (ep) {
+      const wasDown = !ep.healthy || ep.breakerState !== BREAKER_CLOSED;
       ep.healthy = true;
       ep.unhealthySince = null;
       ep.breakerState = BREAKER_CLOSED;
       ep.openSince = null;
       ep.window = [];
       ep.halfOpenInFlight = false;
+      if (wasDown) log.info({ url }, 'rpc_pool:endpoint_healthy');
     }
   }
 

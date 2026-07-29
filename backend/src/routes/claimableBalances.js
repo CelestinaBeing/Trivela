@@ -1,13 +1,17 @@
 // #548 — REST endpoints for claimable balance management.
+// #922 — Submission now runs via the durable job queue instead of blocking
+// the request on a Horizon submitTransaction call.
 
 import { Router } from 'express';
-import { createClaimableBalancesForCampaign } from '../jobs/claimableBalancesJob.js';
+import { randomUUID } from 'node:crypto';
+import { CLAIMABLE_BALANCES_JOB_TYPE } from '../jobs/claimableBalancesJobHandler.js';
 
 /**
  * @param {{
  *   dal: import('../dal/index.js').Dal;
  *   campaignRepository: { getById: Function };
- *   stellarConfig: { networkPassphrase: string; horizonUrl: string };
+ *   jobQueue: { enqueue: (type: string, payload: unknown, opts?: object) => void };
+ *   idempotencyMiddleware?: import('express').RequestHandler;
  *   env?: NodeJS.ProcessEnv;
  *   logger?: { info: Function; warn: Function; error: Function };
  * }} options
@@ -15,14 +19,17 @@ import { createClaimableBalancesForCampaign } from '../jobs/claimableBalancesJob
 export function createClaimableBalancesRoutes({
   dal,
   campaignRepository,
-  stellarConfig,
+  jobQueue,
+  idempotencyMiddleware = (_req, _res, next) => next(),
   env = process.env,
   logger = console,
 }) {
   const router = Router();
 
-  // POST /campaigns/:id/claimable-balances — trigger claimable balance creation on campaign end
-  router.post('/campaigns/:id/claimable-balances', async (req, res) => {
+  // POST /campaigns/:id/claimable-balances — enqueue claimable balance
+  // creation on campaign end. Returns immediately; poll the GET endpoint
+  // below (rows move pending -> created/failed) for outcome.
+  router.post('/campaigns/:id/claimable-balances', idempotencyMiddleware, (req, res) => {
     const campaign = campaignRepository.getById(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'campaign not found' });
 
@@ -30,20 +37,25 @@ export function createClaimableBalancesRoutes({
     const assetCode = req.body?.assetCode ?? env.REWARD_TOKEN_CODE ?? 'XLM';
     const assetIssuer = req.body?.assetIssuer ?? env.REWARD_TOKEN_ISSUER ?? undefined;
     const campaignEndDate = campaign.endDate ? new Date(campaign.endDate) : new Date();
+    const campaignId = String(campaign.id);
+    const jobId = randomUUID();
 
-    const result = await createClaimableBalancesForCampaign({
-      db: dal.db,
-      campaignId: String(campaign.id),
-      campaignEndDate,
-      assetCode,
-      assetIssuer,
-      graceDays,
-      stellarConfig,
-      operatorSecretKey: env.OPERATOR_SECRET_KEY,
-      logger,
-    });
+    jobQueue.enqueue(
+      CLAIMABLE_BALANCES_JOB_TYPE,
+      {
+        jobId,
+        campaignId,
+        campaignEndDate: campaignEndDate.toISOString(),
+        assetCode,
+        assetIssuer,
+        graceDays,
+      },
+      { maxAttempts: 5 },
+    );
 
-    return res.status(202).json({ ok: true, campaignId: String(campaign.id), ...result });
+    logger.info?.(`claimableBalances:enqueued jobId=${jobId} campaignId=${campaignId}`);
+
+    return res.status(202).json({ ok: true, campaignId, jobId, status: 'queued' });
   });
 
   // GET /campaigns/:id/claimable-balances — list claimable balances for a campaign

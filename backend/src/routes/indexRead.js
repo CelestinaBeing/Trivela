@@ -214,6 +214,16 @@ export function createIndexReadRoutes({ dal, campaignRepository }) {
         .all(address, afterRowid, limit + 1);
       events.push(...rows);
     }
+    if (tableExists(db, 'vested_claim_events')) {
+      const rows = db
+        .prepare(
+          `SELECT rowid, user, amount, ledger, tx_hash, 'vested_claim' as type, vest_id
+           FROM vested_claim_events WHERE user = ? AND rowid > ?
+           ORDER BY rowid ASC LIMIT ?`,
+        )
+        .all(address, afterRowid, limit + 1);
+      events.push(...rows);
+    }
 
     events.sort((a, b) => (a.rowid ?? 0) - (b.rowid ?? 0));
     const hasMore = events.length > limit;
@@ -232,6 +242,37 @@ export function createIndexReadRoutes({ dal, campaignRepository }) {
       data: page.map(({ rowid, ...rest }) => rest),
       cursor: nextCursor,
       has_more: hasMore,
+      as_of_ledger,
+    });
+  });
+
+  // ── GET /index/addresses/:address/vesting ────────────────────────────────
+  router.get('/addresses/:address/vesting', (req, res) => {
+    const { address } = req.params;
+    if (!address) return res.status(400).json({ error: 'address is required' });
+
+    if (!tableExists(db, 'vesting_schedules')) {
+      return res.json({ data: [], as_of_ledger: null });
+    }
+
+    const schedules = db
+      .prepare(
+        `SELECT vest_id, total, ledger, tx_hash
+         FROM vesting_schedules WHERE user = ?
+         ORDER BY rowid ASC`,
+      )
+      .all(address);
+
+    const as_of_ledger = getAsOfLedger(db);
+
+    return res.json({
+      address,
+      data: schedules.map(({ vest_id, total, ledger, tx_hash }) => ({
+        vest_id,
+        total,
+        ledger,
+        tx_hash,
+      })),
       as_of_ledger,
     });
   });

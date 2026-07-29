@@ -1,6 +1,7 @@
 // @ts-check
 import { randomUUID } from 'node:crypto';
 import { computeBackoffMs } from './jobRunner.js';
+import { getRequestId, runWithRequestId } from '../lib/requestContext.js';
 
 /**
  * Durable job queue with exponential backoff, dead-letter queue, and crash recovery.
@@ -52,19 +53,22 @@ export function createDurableJobQueue(
       runAt,
       visibleAt: runAt,
       enqueuedAt: now,
+      // Captured from the enqueuing call's context (#925), persisted so it
+      // survives a process restart before the job is claimed.
+      requestId: getRequestId(),
     });
     // Fire a poll without awaiting — safe since processNext is guarded by `processing`
-    processNext().catch((err) => logger.error?.('durableQueue:processNext_error', err));
+    processNext().catch((err) => logger.error?.({ err }, 'durableQueue:processNext_error'));
   }
 
   /** Start the poll loop and recover any stale jobs from a previous crash. */
   function start() {
     const recovered = store.recoverStale(visibilityTimeoutMs);
     if (recovered > 0) {
-      logger.info?.(`durableQueue:recovered stale_jobs=${recovered}`);
+      logger.info?.({ staleJobs: recovered }, 'durableQueue:recovered');
     }
     pollTimer = setInterval(() => {
-      processNext().catch((err) => logger.error?.('durableQueue:poll_error', err));
+      processNext().catch((err) => logger.error?.({ err }, 'durableQueue:poll_error'));
     }, pollIntervalMs);
     pollTimer.unref?.();
   }
@@ -85,21 +89,36 @@ export function createDurableJobQueue(
     try {
       job = store.claimNext(visibilityTimeoutMs);
       if (!job) return;
+      // Re-establish the enqueuing request's correlation ID (or mint a fresh
+      // one, e.g. for jobs enqueued outside any request) so every log line
+      // for this job run — including ones from deep inside the handler —
+      // carries it (#925). The ID survives a process restart because it's
+      // persisted on the job row (migration 035).
+      await runWithRequestId(job.requestId, () => processClaimedJob(job));
+    } finally {
+      processing = false;
+    }
+  }
 
+  /** @param {ReturnType<typeof store.claimNext>} job */
+  async function processClaimedJob(job) {
+    try {
       const handler = handlers[job.type];
       if (!handler) {
-        logger.warn?.(`durableQueue:drop type=${job.type} reason=no_handler`);
+        logger.warn?.({ type: job.type }, 'durableQueue:drop reason=no_handler');
         store.ack(job.id);
         return;
       }
 
       const startedAt = Date.now();
-      logger.info?.(`durableQueue:start type=${job.type} attempt=${job.attempts + 1}`);
+      logger.info?.({ type: job.type, attempt: job.attempts + 1 }, 'durableQueue:start');
       await handler(job.payload);
       store.ack(job.id);
-      logger.info?.(`durableQueue:success type=${job.type} duration_ms=${Date.now() - startedAt}`);
+      logger.info?.(
+        { type: job.type, durationMs: Date.now() - startedAt },
+        'durableQueue:success',
+      );
     } catch (err) {
-      if (!job) return;
       const nextAttempts = job.attempts + 1;
       const errorMessage =
         err && typeof err === 'object' && 'message' in err
@@ -115,12 +134,14 @@ export function createDurableJobQueue(
         const nextRunAt = new Date(Date.now() + backoffMs).toISOString();
         store.nack(job.id, { nextRunAt, attempts: nextAttempts, errorMessage, isDead: false });
         logger.warn?.(
-          `durableQueue:retry type=${job.type} attempt=${nextAttempts} in_ms=${backoffMs}`,
+          { type: job.type, attempt: nextAttempts, inMs: backoffMs },
+          'durableQueue:retry',
         );
       } else {
         store.nack(job.id, { isDead: true, errorMessage });
         logger.warn?.(
-          `durableQueue:dead type=${job.type} attempts=${nextAttempts} error=${errorMessage}`,
+          { type: job.type, attempts: nextAttempts, errorMessage },
+          'durableQueue:dead',
         );
         try {
           deadLetter?.record({
@@ -131,13 +152,23 @@ export function createDurableJobQueue(
             enqueuedAt: job.enqueuedAt,
           });
         } catch (dlErr) {
-          logger.error?.(`durableQueue:dead_letter_store_failed type=${job.type}`, dlErr);
+          logger.error?.({ type: job.type, err: dlErr }, 'durableQueue:dead_letter_store_failed');
         }
       }
-    } finally {
-      processing = false;
     }
   }
 
-  return { enqueue, start, stop };
+  /**
+   * Queue depth snapshot for monitoring (#930): counts pending/running jobs
+   * and the dead-letter backlog directly from the store.
+   */
+  function getStatus() {
+    return {
+      pending: store.countByStatus('pending'),
+      running: store.countByStatus('running'),
+      dead: store.countDead(),
+    };
+  }
+
+  return { enqueue, start, stop, getStatus };
 }

@@ -8,6 +8,9 @@
 //! - `claim`: topics `(claim, user)`, data `amount: u64`
 //! - `transfer`: topics `(transfer, from, to)`, data `amount: u64`
 //! - `paused`: topics `(paused,)`, data `is_paused: bool`
+//! - `pscredit`: topics `(pscredit,)`, data `is_paused: bool`  (credit-class pause, #1019)
+//! - `psclaim`: topics `(psclaim,)`, data `is_paused: bool`   (claim-class pause, #1019)
+//! - `psredeem`: topics `(psredeem,)`, data `is_paused: bool` (redeem-class pause, #1019)
 //! - `max_credit_per_call`: topics `(mxcredit,)`, data `max_amount: u64`
 //! - `campaign_multiplier`: topics `(multset, campaign_id)`, data `multiplier_bps: u32`
 //! - `rate_limit_set`: topics `(ratlset,)`, data `(max_calls: u32, window_ledgers: u32)`
@@ -40,6 +43,13 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, contracttype, symbol_short, Address,
     Bytes, BytesN, Env, Symbol, Vec,
 };
+
+mod poseidon;
+mod merkle;
+#[cfg(test)]
+mod poseidon_merkle_tests;
+#[cfg(test)]
+mod poseidon_vs_sha256_bench;
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -85,6 +95,14 @@ pub enum Error {
     NonceReused = 27,
     DuplicateSigner = 28,
     UnknownSigner = 29,
+    /// Operation amount must be greater than zero (issue #1020).
+    ///
+    /// Assigned 30/31 rather than 21/22: the SEP-41 block already published
+    /// those codes through the generated bindings and docs/CONTRACTS_API.md,
+    /// so renumbering it would break decoding for existing clients.
+    ZeroAmount = 30,
+    /// Transfer source and destination cannot be the same address (issue #1020).
+    SelfTransfer = 31,
 }
 
 /// Vesting schedule record stored per user per vest_id.
@@ -130,13 +148,25 @@ pub const TTL_EXTEND_TO: u32 = 100;
 
 const ADMIN: Symbol = symbol_short!("admin");
 const BALANCE: Symbol = symbol_short!("balance");
+// Total outstanding points in circulation — incremented by credit, decremented
+// by claim and redeem. Conservation invariant: total_supply = Σ user balances
+// (issue #1021).
+const TOTAL_SUPPLY: Symbol = symbol_short!("tsupply");
 const CLAIMED: Symbol = symbol_short!("claimed");
 const METADATA: Symbol = symbol_short!("metadata");
 const PAUSED: Symbol = symbol_short!("paused");
+// Per-function pause flags (#1019)
+const PAUSE_CREDIT: Symbol = symbol_short!("pscredit");
+const PAUSE_CLAIM: Symbol = symbol_short!("psclaim");
+const PAUSE_REDEEM: Symbol = symbol_short!("psredeem");
 const CREDIT_EVENT: Symbol = symbol_short!("credit");
 const CLAIM_EVENT: Symbol = symbol_short!("claim");
 const TRANSFER_EVENT: Symbol = symbol_short!("transfer");
 const PAUSED_EVENT: Symbol = symbol_short!("paused");
+// Per-function pause events (#1019)
+const PAUSE_CREDIT_EVENT: Symbol = symbol_short!("pscredit");
+const PAUSE_CLAIM_EVENT: Symbol = symbol_short!("psclaim");
+const PAUSE_REDEEM_EVENT: Symbol = symbol_short!("psredeem");
 const MAX_CREDIT_EVENT: Symbol = symbol_short!("mxcredit");
 const CAMPAIGN_MULTIPLIER_EVENT: Symbol = symbol_short!("multset");
 const MAX_CREDIT_PER_CALL: Symbol = symbol_short!("mxcredit");
@@ -261,7 +291,33 @@ fn ensure_not_paused(env: &Env) -> Result<(), Error> {
     if paused {
         return Err(Error::ContractPaused);
     }
+    Ok(())
+}
 
+fn ensure_credit_not_paused(env: &Env) -> Result<(), Error> {
+    ensure_not_paused(env)?;
+    let paused: bool = env.storage().instance().get(&PAUSE_CREDIT).unwrap_or(false);
+    if paused {
+        return Err(Error::ContractPaused);
+    }
+    Ok(())
+}
+
+fn ensure_claim_not_paused(env: &Env) -> Result<(), Error> {
+    ensure_not_paused(env)?;
+    let paused: bool = env.storage().instance().get(&PAUSE_CLAIM).unwrap_or(false);
+    if paused {
+        return Err(Error::ContractPaused);
+    }
+    Ok(())
+}
+
+fn ensure_redeem_not_paused(env: &Env) -> Result<(), Error> {
+    ensure_not_paused(env)?;
+    let paused: bool = env.storage().instance().get(&PAUSE_REDEEM).unwrap_or(false);
+    if paused {
+        return Err(Error::ContractPaused);
+    }
     Ok(())
 }
 
@@ -502,8 +558,11 @@ impl RewardsContract {
 
     /// Credit points to a user.
     pub fn credit(env: Env, from: Address, user: Address, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         from.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_credit_not_paused(&env)?;
         check_and_increment_rate(&env, &from, 1)?;
 
         let max_credit_per_call: u64 = env
@@ -519,6 +578,13 @@ impl RewardsContract {
         let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
         let new_balance = current.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage().instance().set(&key, &new_balance);
+
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage().instance().set(
+            &TOTAL_SUPPLY,
+            &supply.checked_add(amount).ok_or(Error::Overflow)?,
+        );
+
         env.events().publish((CREDIT_EVENT, user), amount);
         env.storage()
             .instance()
@@ -562,12 +628,15 @@ impl RewardsContract {
         recipients: Vec<(Address, u64)>,
     ) -> Result<(), Error> {
         from.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_credit_not_paused(&env)?;
         check_and_increment_rate(&env, &from, recipients.len())?;
 
         let mut staged = Vec::new(&env);
 
         for (user, amount) in recipients.iter() {
+            if amount == 0 {
+                return Err(Error::ZeroAmount);
+            }
             let key = (BALANCE, user.clone());
             let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
             let new_balance = current.checked_add(amount).ok_or(Error::Overflow)?;
@@ -592,8 +661,11 @@ impl RewardsContract {
 
     /// Claim rewards for a user (reduces balance).
     pub fn claim(env: Env, user: Address, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         user.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_claim_not_paused(&env)?;
 
         let key = (BALANCE, user.clone());
         let current: u64 = env.storage().instance().get(&key).unwrap_or(0);
@@ -606,6 +678,11 @@ impl RewardsContract {
         env.storage()
             .instance()
             .set(&CLAIMED, &total.saturating_add(amount));
+
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.saturating_sub(amount));
 
         env.events().publish((CLAIM_EVENT, user), amount);
         env.storage()
@@ -627,6 +704,12 @@ impl RewardsContract {
         to: Address,
         amount: u64,
     ) -> Result<(), Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
+        if from == to {
+            return Err(Error::SelfTransfer);
+        }
         require_admin(&env, &admin)?;
 
         let from_key = (BALANCE, from.clone());
@@ -754,6 +837,54 @@ impl RewardsContract {
         env.storage().instance().get(&PAUSED).unwrap_or(false)
     }
 
+    // ── Per-function pause (#1019) ───────────────────────────────────────────
+
+    /// Pause or unpause the `credit` / `batch_credit` / `credit_vested` /
+    /// `credit_by_rank` operations independently of the global pause.
+    pub fn set_paused_credit(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        require_admin(&env, &admin)?;
+        env.storage().instance().set(&PAUSE_CREDIT, &paused);
+        env.events().publish((PAUSE_CREDIT_EVENT,), paused);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    /// Pause or unpause the `claim` / `claim_vested` operations independently.
+    pub fn set_paused_claim(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        require_admin(&env, &admin)?;
+        env.storage().instance().set(&PAUSE_CLAIM, &paused);
+        env.events().publish((PAUSE_CLAIM_EVENT,), paused);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    /// Pause or unpause the `redeem` operation independently.
+    pub fn set_paused_redeem(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        require_admin(&env, &admin)?;
+        env.storage().instance().set(&PAUSE_REDEEM, &paused);
+        env.events().publish((PAUSE_REDEEM_EVENT,), paused);
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    pub fn is_paused_credit(env: Env) -> bool {
+        env.storage().instance().get(&PAUSE_CREDIT).unwrap_or(false)
+    }
+
+    pub fn is_paused_claim(env: Env) -> bool {
+        env.storage().instance().get(&PAUSE_CLAIM).unwrap_or(false)
+    }
+
+    pub fn is_paused_redeem(env: Env) -> bool {
+        env.storage().instance().get(&PAUSE_REDEEM).unwrap_or(false)
+    }
+
     /// Configure tiered reward distribution for a campaign (admin only).
     pub fn set_tiers(
         env: Env,
@@ -817,7 +948,7 @@ impl RewardsContract {
         // `Self::credit` below already calls `from.require_auth()`; calling it
         // again here would double-authorize the same address in one frame and
         // trip the host's `Auth(ExistingValue)` guard.
-        ensure_not_paused(&env)?;
+        ensure_credit_not_paused(&env)?;
 
         let points = Self::get_tier_for_rank(env.clone(), rank, campaign_id);
         let new_balance = Self::credit(env.clone(), from, user.clone(), points)?;
@@ -926,8 +1057,11 @@ impl RewardsContract {
         start_ledger: u32,
         end_ledger: u32,
     ) -> Result<u64, Error> {
+        if total_amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         from.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_credit_not_paused(&env)?;
 
         let vest_ctr_key = (VEST_CTR, user.clone());
         let vest_id: u64 = env.storage().instance().get(&vest_ctr_key).unwrap_or(0);
@@ -986,8 +1120,11 @@ impl RewardsContract {
     /// Claim up to `amount` from the unlocked portion of a specific vesting schedule.
     /// Returns the remaining claimable amount in that vest schedule after this claim.
     pub fn claim_vested(env: Env, user: Address, vest_id: u64, amount: u64) -> Result<u64, Error> {
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
         user.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_claim_not_paused(&env)?;
 
         let key = (VEST, user.clone(), vest_id);
         let mut record: VestingRecord = env
@@ -1081,12 +1218,16 @@ impl RewardsContract {
         Self::redemption_reserve(env) as i128
     }
 
+    pub fn total_supply(env: Env) -> u64 {
+        env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0)
+    }
+
     /// Redeem points for asset tokens.
     /// Burns points_amount from user balance, transfers asset tokens to user.
     /// Returns the amount of asset tokens transferred.
     pub fn redeem(env: Env, user: Address, points_amount: u64) -> Result<i128, Error> {
         user.require_auth();
-        ensure_not_paused(&env)?;
+        ensure_redeem_not_paused(&env)?;
 
         // Get redemption config
         let asset_address: Address = env
@@ -1129,6 +1270,12 @@ impl RewardsContract {
             .checked_sub(points_amount)
             .ok_or(Error::InsufficientBalance)?;
         env.storage().instance().set(&balance_key, &new_balance);
+
+        // Deduct from total supply (conservation invariant, issue #1021)
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.saturating_sub(points_amount));
 
         // Update reserve
         let new_reserve = current_reserve.saturating_sub(asset_amount as u64);

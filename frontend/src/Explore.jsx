@@ -7,11 +7,36 @@ import CampaignCard from './components/CampaignCard';
 import CampaignFilters, { sortKeyToApiParams } from './components/CampaignFilters';
 import EmptyState from './components/EmptyState';
 import PageMeta from './components/PageMeta';
+import OnboardingTour from './components/OnboardingTour';
 import { logSafeEvent } from './lib/safeAnalytics';
 import './Explore.css';
 
 const CAMPAIGNS_PER_PAGE = 9;
 const RAIL_LIMIT = 6;
+
+const EXPLORE_TOUR_STORAGE_KEY = 'trivela:tour_completed_explore';
+
+const EXPLORE_TOUR_STEPS = [
+  {
+    element: '[data-tour="explore-filters"]',
+    popover: {
+      title: 'Search & filter',
+      description:
+        'Search by name or description, filter to active campaigns, and sort by newest, reward size, or name.',
+      side: 'bottom',
+      align: 'start',
+    },
+  },
+  {
+    element: '[data-tour="explore-all-campaigns"]',
+    popover: {
+      title: 'Browse all campaigns',
+      description: 'Every public campaign lives here, paginated from the backend API.',
+      side: 'top',
+      align: 'start',
+    },
+  },
+];
 
 const VALID_SORT_KEYS = new Set([
   'newest',
@@ -253,7 +278,11 @@ export default function Explore({
 
         <CampaignRail title="New" campaigns={newCampaigns} isLoading={isNewLoading} />
 
-        <section className="explore-section" aria-labelledby="explore-all-title">
+        <section
+          className="explore-section"
+          aria-labelledby="explore-all-title"
+          data-tour="explore-all-campaigns"
+        >
           <div className="explore-section-header">
             <h2 id="explore-all-title" className="explore-section-title">
               All Campaigns
@@ -266,23 +295,25 @@ export default function Explore({
             )}
           </div>
 
-          <CampaignFilters
-            query={campaignQuery}
-            activeOnly={activeOnly}
-            sortKey={sortKey}
-            onQueryChange={(next) => {
-              setCampaignPage(1);
-              setCampaignQuery(next);
-            }}
-            onActiveOnlyChange={(next) => {
-              setCampaignPage(1);
-              setActiveOnly(next);
-            }}
-            onSortKeyChange={(next) => {
-              setCampaignPage(1);
-              setSortKey(normalizeSortKey(next));
-            }}
-          />
+          <div data-tour="explore-filters">
+            <CampaignFilters
+              query={campaignQuery}
+              activeOnly={activeOnly}
+              sortKey={sortKey}
+              onQueryChange={(next) => {
+                setCampaignPage(1);
+                setCampaignQuery(next);
+              }}
+              onActiveOnlyChange={(next) => {
+                setCampaignPage(1);
+                setActiveOnly(next);
+              }}
+              onSortKeyChange={(next) => {
+                setCampaignPage(1);
+                setSortKey(normalizeSortKey(next));
+              }}
+            />
+          </div>
 
           {category && (
             <div className="explore-active-category">
@@ -400,6 +431,7 @@ export default function Explore({
           )}
         </section>
       </main>
+      <OnboardingTour steps={EXPLORE_TOUR_STEPS} storageKey={EXPLORE_TOUR_STORAGE_KEY} />
     </div>
   );
 }

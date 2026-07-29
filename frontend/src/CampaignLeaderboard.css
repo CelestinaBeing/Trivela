@@ -49,6 +49,45 @@
   margin: 0;
 }
 
+/* ── Live Indicator ──────────────────────────────────────────────────────── */
+
+.lb-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+}
+
+.lb-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.lb-live-on {
+  color: var(--accent);
+}
+
+.lb-live-on .lb-live-dot {
+  background: #2ecc71;
+  box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.25);
+  animation: lb-pulse 1.6s infinite;
+}
+
+@keyframes lb-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
 /* ── My Rank Banner ──────────────────────────────────────────────────────── */
 
 .lb-my-rank-banner {
@@ -247,6 +286,21 @@
   color: var(--text-muted);
   font-family: var(--font-heading);
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.lb-tie-badge {
+  font-family: var(--font-body, inherit);
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0.05rem 0.3rem;
 }
 
 /* ── You badge ───────────────────────────────────────────────────────────── */

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { driver } from 'driver.js';
 import 'driver.js/dist/driver.css';
 
-const TOUR_KEY = 'trivela:tour_completed';
+const DEFAULT_TOUR_KEY = 'trivela:tour_completed';
 
-const TOUR_STEPS = [
+const DEFAULT_TOUR_STEPS = [
   {
     popover: {
       title: 'Welcome to Trivela',
@@ -56,7 +56,11 @@ const TOUR_STEPS = [
   },
 ];
 
-export default function OnboardingTour({ onRestart }) {
+export default function OnboardingTour({
+  onRestart,
+  steps = DEFAULT_TOUR_STEPS,
+  storageKey = DEFAULT_TOUR_KEY,
+}) {
   const driverRef = useRef(null);
   const [ready, setReady] = useState(false);
 
@@ -72,9 +76,9 @@ export default function OnboardingTour({ onRestart }) {
       nextBtnText: 'Next',
       prevBtnText: 'Back',
       doneBtnText: 'Finish',
-      steps: TOUR_STEPS,
+      steps,
       onDestroyed: () => {
-        localStorage.setItem(TOUR_KEY, 'true');
+        localStorage.setItem(storageKey, 'true');
       },
     });
 
@@ -83,7 +87,7 @@ export default function OnboardingTour({ onRestart }) {
   };
 
   useEffect(() => {
-    const completed = localStorage.getItem(TOUR_KEY);
+    const completed = localStorage.getItem(storageKey);
     if (!completed) {
       const timeout = setTimeout(() => {
         setReady(true);
@@ -91,7 +95,7 @@ export default function OnboardingTour({ onRestart }) {
       }, 600);
       return () => clearTimeout(timeout);
     }
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     if (onRestart) {
