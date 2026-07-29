@@ -1541,4 +1541,175 @@ fn test_referral_lock_prevents_referrer_swap_on_re_register() {
     // referrer_b must NOT receive a credit; referrer_a still at 1.
     assert_eq!(client.referral_count(&referrer_a), 1);
     assert_eq!(client.referral_count(&referrer_b), 0);
+// ── Referral loop detection + sybil guard (#743) ─────────────────────────────
+
+#[test]
+fn test_referral_loop_direct_cycle_rejected() {
+    let (env, _contract_id, client) = setup();
+// ── Issue #740: participation barrier survives deregistration ─────────────────
+
+#[test]
+fn test_participation_marker_set_on_register() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    let (leaf, proof) = no_proof_args(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    // Alice registers with Bob as referrer — Bob must be registered first.
+    client.register(&bob, &leaf, &proof, &None, &None);
+    client.register(&alice, &leaf, &proof, &Some(bob.clone()), &None);
+
+    // Bob tries to register with Alice as referrer → forms cycle Alice→Bob→Alice.
+    // Bob is already registered so the early-return path fires (Ok(false)), but
+    // we need to deregister Bob first to exercise the loop-detection branch.
+    client.deregister(&bob);
+    let result = client.try_register(&bob, &leaf, &proof, &Some(alice.clone()), &None);
+    assert_eq!(result, Ok(Err(Error::ReferralLoop)));
+}
+
+#[test]
+fn test_referral_loop_indirect_cycle_rejected() {
+    let (env, _contract_id, client) = setup();
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    assert!(!client.has_participated(&participant));
+    client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_deregister_does_not_clear_participation_marker() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(client.has_participated(&participant));
+
+    client.deregister(&participant);
+    assert!(!client.is_participant(&participant));
+    // Participation history persists after deregistration
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_re_registration_after_deregister_is_blocked() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    let (leaf, proof) = no_proof_args(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let carol = Address::generate(&env);
+
+    // Chain: carol → bob → alice (alice is the root, no referrer).
+    client.register(&alice, &leaf, &proof, &None, &None);
+    client.register(&bob, &leaf, &proof, &Some(alice.clone()), &None);
+    client.register(&carol, &leaf, &proof, &Some(bob.clone()), &None);
+
+    // Alice tries to register with carol as referrer → alice→carol→bob→alice cycle.
+    client.deregister(&alice);
+    let result = client.try_register(&alice, &leaf, &proof, &Some(carol.clone()), &None);
+    assert_eq!(result, Ok(Err(Error::ReferralLoop)));
+}
+
+#[test]
+fn test_referral_locked_prevents_referrer_switch_on_reregister() {
+    let (env, _contract_id, client) = setup();
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    client.deregister(&participant);
+
+    // Re-register attempt must fail with NullifierAlreadyUsed
+    let result = client.try_register(&participant, &leaf, &proof, &None, &None);
+    assert_eq!(result, Err(Ok(Error::NullifierAlreadyUsed)));
+}
+
+#[test]
+fn test_clear_participation_allows_re_registration() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    let (leaf, proof) = no_proof_args(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let carol = Address::generate(&env);
+
+    // All three are registered; alice was referred by bob.
+    client.register(&bob, &leaf, &proof, &None, &None);
+    client.register(&carol, &leaf, &proof, &None, &None);
+    client.register(&alice, &leaf, &proof, &Some(bob.clone()), &None);
+
+    // Alice deregisters and tries to re-register with carol as new referrer.
+    client.deregister(&alice);
+    let result = client.try_register(&alice, &leaf, &proof, &Some(carol.clone()), &None);
+    assert_eq!(result, Ok(Err(Error::ReferralLocked)));
+}
+
+#[test]
+fn test_referral_locked_allows_reregister_same_referrer() {
+    let (env, _contract_id, client) = setup();
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+    client.deregister(&participant);
+
+    // Admin explicitly clears participation history
+    client.clear_participation(&admin, &1, &participant);
+    assert!(!client.has_participated(&participant));
+
+    // Now re-registration succeeds
+    let was_new = client.register(&participant, &leaf, &proof, &None, &None);
+    assert!(was_new);
+    assert!(client.has_participated(&participant));
+}
+
+#[test]
+fn test_root_rotation_does_not_allow_double_registration() {
+    let (env, _, client) = setup();
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+    env.mock_all_auths();
+
+    let (leaf, proof) = no_proof_args(&env);
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+
+    client.register(&bob, &leaf, &proof, &None, &None);
+    client.register(&alice, &leaf, &proof, &Some(bob.clone()), &None);
+
+    // Alice deregisters and re-registers with the SAME referrer → allowed.
+    client.deregister(&alice);
+    let result = client.register(&alice, &leaf, &proof, &Some(bob.clone()), &None);
+    assert!(result);
+    client.set_active(&admin, &0, &true);
+    let (leaf, proof) = no_proof_args(&env);
+    let participant = Address::generate(&env);
+
+    client.register(&participant, &leaf, &proof, &None, &None);
+
+    // Simulate root rotation (set a new merkle root — but participant has no root so it passes)
+    // The participation barrier fires before any Merkle check
+    let result = client.try_register(&participant, &leaf, &proof, &None, &None);
+    assert_eq!(result, Err(Ok(Error::NullifierAlreadyUsed)));
 }

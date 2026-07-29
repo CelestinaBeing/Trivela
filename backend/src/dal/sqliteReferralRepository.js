@@ -88,5 +88,75 @@ export function createSqliteReferralRepository({ db }) {
     }));
   }
 
-  return { create, countByReferrer, listByCampaign, getByRefereeAndCampaign, listAll };
+  /**
+   * Top referrers for a campaign, ranked by referral count (most referrals first).
+   * Ties (equal counts) share the same rank using standard competition ranking
+   * (1, 1, 3, ...), so a tie never skips a visible position.
+   * @param {string|number} campaignId
+   * @param {{ limit?: number, offset?: number }} [opts]
+   * @returns {{ rows: Array<{ referrerAddress: string, referralCount: number, rank: number, firstReferralAt: string }>, total: number }}
+   */
+  function getLeaderboard(campaignId, { limit = 20, offset = 0 } = {}) {
+    const grouped = db
+      .prepare(
+        `SELECT referrer_address AS referrerAddress,
+                COUNT(*) AS referralCount,
+                MIN(created_at) AS firstReferralAt
+         FROM referrals
+         WHERE campaign_id = ?
+         GROUP BY referrer_address
+         ORDER BY referralCount DESC, firstReferralAt ASC`,
+      )
+      .all(Number(campaignId));
+
+    let rank = 0;
+    let lastCount = null;
+    const ranked = /** @type {any[]} */ (grouped).map((row, index) => {
+      if (row.referralCount !== lastCount) {
+        rank = index + 1;
+        lastCount = row.referralCount;
+      }
+      return { ...row, rank };
+    });
+
+    return { rows: ranked.slice(offset, offset + limit), total: ranked.length };
+  }
+
+  /**
+   * A single referrer's rank within a campaign's referral leaderboard.
+   * Returns null when the referrer has no referrals (unranked).
+   * @param {string|number} campaignId
+   * @param {string} referrerAddress
+   * @returns {{ referralCount: number, rank: number } | null}
+   */
+  function getReferrerRank(campaignId, referrerAddress) {
+    const referralCount = countByReferrer(campaignId, referrerAddress);
+    if (referralCount === 0) return null;
+
+    const row = /** @type {any} */ (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS aheadCount FROM (
+             SELECT referrer_address, COUNT(*) AS c
+             FROM referrals
+             WHERE campaign_id = ?
+             GROUP BY referrer_address
+             HAVING c > ?
+           )`,
+        )
+        .get(Number(campaignId), referralCount)
+    );
+
+    return { referralCount, rank: (row?.aheadCount ?? 0) + 1 };
+  }
+
+  return {
+    create,
+    countByReferrer,
+    listByCampaign,
+    getByRefereeAndCampaign,
+    listAll,
+    getLeaderboard,
+    getReferrerRank,
+  };
 }

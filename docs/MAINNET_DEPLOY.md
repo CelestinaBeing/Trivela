@@ -319,7 +319,7 @@ Run this checklist after deployment and before announcing mainnet availability.
 ## References
 
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — blue/green and restart policies
+- [OPERATIONS_RUNBOOK.md](./OPERATIONS_RUNBOOK.md) — deploy, verify, monitor, rollback procedures
 - [KUBERNETES.md](./KUBERNETES.md) — full Kubernetes reference
 - [SECURITY.md](./SECURITY.md) — key rotation and incident response
 - [MAINNET_CHECKLIST.md](./MAINNET_CHECKLIST.md) — sign-off checklist for all contributors
-- [RUNBOOK.md](./RUNBOOK.md) — rollback and incident procedures

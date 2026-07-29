@@ -19,9 +19,13 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Sandbox seeder state
+.sandbox-state.json
+
 # Turborepo
 .turbo
 
 # Playwright
 **/playwright-report-visual/
 **/test-results/
+backend/build/

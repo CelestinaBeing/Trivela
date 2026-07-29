@@ -27,6 +27,7 @@ function rowToJob(row) {
     visibleAt: /** @type {string} */ (row.visible_at),
     enqueuedAt: /** @type {string} */ (row.enqueued_at),
     errorMessage: row.error_message ?? null,
+    requestId: /** @type {string | null} */ (row.request_id ?? null),
   };
 }
 
@@ -41,8 +42,8 @@ export function createSqliteJobQueueRepository({ db }) {
   const insertStmt = db.prepare(`
     INSERT INTO job_queue
       (id, type, payload, status, attempts, max_attempts, base_delay_ms, max_delay_ms,
-       run_at, visible_at, enqueued_at)
-    VALUES (?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?, ?)
+       run_at, visible_at, enqueued_at, request_id)
+    VALUES (?, ?, ?, 'pending', 0, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const selectPendingStmt = db.prepare(`
@@ -92,6 +93,10 @@ export function createSqliteJobQueueRepository({ db }) {
 
   const countDeadStmt = db.prepare(`SELECT COUNT(*) AS n FROM job_queue WHERE status = 'dead'`);
 
+  const countByStatusStmt = db.prepare(
+    `SELECT COUNT(*) AS n FROM job_queue WHERE status = ?`,
+  );
+
   const findByIdStmt = db.prepare('SELECT * FROM job_queue WHERE id = ? LIMIT 1');
 
   const deleteByIdStmt = db.prepare('DELETE FROM job_queue WHERE id = ?');
@@ -109,6 +114,7 @@ export function createSqliteJobQueueRepository({ db }) {
    *   runAt?: string,
    *   visibleAt?: string,
    *   enqueuedAt?: string,
+   *   requestId?: string | null,
    * }} job
    */
   function enqueue(job) {
@@ -127,6 +133,7 @@ export function createSqliteJobQueueRepository({ db }) {
       runAt,
       job.visibleAt ?? runAt,
       job.enqueuedAt ?? now,
+      job.requestId ?? null,
     );
     return id;
   }
@@ -201,6 +208,17 @@ export function createSqliteJobQueueRepository({ db }) {
   }
 
   /**
+   * Count jobs currently in a given status ('pending' | 'running' | 'dead').
+   * Used to report queue depth for monitoring (#930).
+   *
+   * @param {string} status
+   */
+  function countByStatus(status) {
+    const row = countByStatusStmt.get(status);
+    return row?.n ?? 0;
+  }
+
+  /**
    * @param {string} id
    */
   function getById(id) {
@@ -216,5 +234,16 @@ export function createSqliteJobQueueRepository({ db }) {
     return info.changes > 0;
   }
 
-  return { enqueue, claimNext, ack, nack, recoverStale, listDead, countDead, getById, removeById };
+  return {
+    enqueue,
+    claimNext,
+    ack,
+    nack,
+    recoverStale,
+    listDead,
+    countDead,
+    countByStatus,
+    getById,
+    removeById,
+  };
 }

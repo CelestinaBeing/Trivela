@@ -5,6 +5,7 @@ import { getWalletAddress, isWalletConnected } from '../stellar';
 import { walletManager } from '../lib/wallet/index.js';
 import TransactionStatus from './TransactionStatus';
 import { logSafeEvent } from '../lib/safeAnalytics';
+import { useToast } from '../lib/toast/ToastProvider';
 import './AdminControlPanel.css';
 
 /**
@@ -17,6 +18,7 @@ import './AdminControlPanel.css';
  * - set_merkle_root: Set allowlist Merkle root
  */
 export default function AdminControlPanel({ contractId: propContractId }) {
+  const toast = useToast();
   const [contractId, setContractId] = useState(propContractId || getCampaignContractId() || '');
   const [walletAddress, setWalletAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -170,13 +172,16 @@ export default function AdminControlPanel({ contractId: propContractId }) {
       const hash = tx.signed.hash().toString('hex');
       setTxHash(hash);
       setSuccess(successMessage);
+      toast.success(successMessage);
 
       // Reload campaign state
       setTimeout(() => {
         loadCampaignState();
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Transaction failed');
+      const message = err.message || 'Transaction failed';
+      setError(message);
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

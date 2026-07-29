@@ -1,6 +1,7 @@
 // @ts-check
 import { Router } from 'express';
 import { requirePermission } from '../middleware/rbac.js';
+import { log } from '../middleware/logger.js';
 
 /**
  * Organization-scoped audit log API routes
@@ -50,7 +51,7 @@ export function createAuditRouter({ auditLogService, requireApiKey }) {
         ...result,
       });
     } catch (error) {
-      console.error('Error fetching audit logs:', error);
+      log.error({ err: error }, 'Error fetching audit logs');
       return res.status(500).json({
         error: 'Internal server error',
         code: 'AUDIT_FETCH_ERROR',
@@ -88,7 +89,7 @@ export function createAuditRouter({ auditLogService, requireApiKey }) {
 
         return res.send(exportResult.content);
       } catch (error) {
-        console.error('Error exporting audit logs as CSV:', error);
+        log.error({ err: error }, 'Error exporting audit logs as CSV');
         return res.status(500).json({
           error: 'Internal server error',
           code: 'AUDIT_EXPORT_ERROR',
@@ -127,7 +128,7 @@ export function createAuditRouter({ auditLogService, requireApiKey }) {
 
         return res.send(exportResult.content);
       } catch (error) {
-        console.error('Error exporting audit logs as JSON:', error);
+        log.error({ err: error }, 'Error exporting audit logs as JSON');
         return res.status(500).json({
           error: 'Internal server error',
           code: 'AUDIT_EXPORT_ERROR',
@@ -162,7 +163,7 @@ export function createAuditRouter({ auditLogService, requireApiKey }) {
           data: stats,
         });
       } catch (error) {
-        console.error('Error fetching audit stats:', error);
+        log.error({ err: error }, 'Error fetching audit stats');
         return res.status(500).json({
           error: 'Internal server error',
           code: 'AUDIT_STATS_ERROR',
@@ -197,7 +198,7 @@ export function createAuditRouter({ auditLogService, requireApiKey }) {
           data: activities,
         });
       } catch (error) {
-        console.error('Error fetching activity feed:', error);
+        log.error({ err: error }, 'Error fetching activity feed');
         return res.status(500).json({
           error: 'Internal server error',
           code: 'ACTIVITY_FEED_ERROR',

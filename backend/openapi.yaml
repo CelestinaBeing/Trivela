@@ -203,6 +203,14 @@ paths:
           schema:
             type: string
             enum: [asc, desc]
+        - name: status
+          in: query
+          description: >-
+            Filter by campaign status. Defaults to `published` for public (no API key) requests.
+            Requesting `draft`, `archived`, or `all` requires an API key.
+          schema:
+            type: string
+            enum: [draft, published, archived, all]
       responses:
         '200':
           description: Paginated campaign list
@@ -210,6 +218,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CampaignListResponse'
+        '401':
+          description: API key required to access draft, archived, or all campaigns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
     post:
       summary: Create a new campaign
@@ -568,6 +582,17 @@ paths:
                   type: string
                   format: date-time
                   nullable: true
+                orgId:
+                  type: string
+                  description: Scope the key to an organization.
+                scopes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ApiKeyScope'
+                  description: Defaults to the full legacy scope set if omitted.
+                rateTier:
+                  $ref: '#/components/schemas/ApiKeyRateTier'
+                  description: Defaults to `standard` if omitted.
       responses:
         '201':
           description: API key created (raw key returned once)
@@ -627,6 +652,179 @@ paths:
                     type: string
                   metadata:
                     $ref: '#/components/schemas/ApiKeyMetadata'
+
+  /api/v1/admin/api-keys/{id}/rate-tier:
+    put:
+      summary: Update an API key's rate tier
+      description: >-
+        Changes the enforced rate-limit tier in place, without rotating (and
+        thus invalidating) the caller's existing credential.
+      tags:
+        - Admin
+      operationId: updateApiKeyRateTier
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rateTier
+              properties:
+                rateTier:
+                  $ref: '#/components/schemas/ApiKeyRateTier'
+      responses:
+        '200':
+          description: Rate tier updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metadata:
+                    $ref: '#/components/schemas/ApiKeyMetadata'
+        '400':
+          description: Invalid rate tier value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/pii/export-user:
+    post:
+      summary: Export all off-chain PII for a wallet address or email (GDPR right of access)
+      description: >-
+        Returns every row across off-chain tables (participation, credits/claims,
+        referrals, notification preferences, push subscriptions, etc.) matching the
+        given identifier. Web Push credential fields (`p256dh`, `auth`) are redacted.
+        See `docs/EVENT_SCHEMA.md` for the on-chain immutability notes this endpoint
+        is scoped by.
+      tags:
+        - Admin
+      operationId: exportPiiForUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - identifier
+              properties:
+                identifier:
+                  type: string
+                  description: Wallet address (G...) or email to export data for.
+      responses:
+        '200':
+          description: Export payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PiiExportResponse'
+        '400':
+          description: Missing identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/pii/purge-user:
+    post:
+      summary: Erase all off-chain PII for a wallet address or email (GDPR right to erasure)
+      description: >-
+        Hard-deletes every row across off-chain tables matching the given identifier.
+        Has no effect on-chain — see `docs/EVENT_SCHEMA.md` for the immutability and
+        re-indexing caveats. Idempotent: re-running against an already-purged
+        identifier is a safe no-op.
+      tags:
+        - Admin
+      operationId: purgePiiForUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - identifier
+              properties:
+                identifier:
+                  type: string
+                  description: Wallet address (G...) or email to purge data for.
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PiiPurgeResponse'
+        '400':
+          description: Missing identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/pii/purge-campaign:
+    post:
+      summary: Erase campaign-scoped PII rows (referrals, allowlist entries, etc.)
+      tags:
+        - Admin
+      operationId: purgePiiForCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - campaignId
+              properties:
+                campaignId:
+                  type: string
+      responses:
+        '200':
+          description: Purge result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PiiPurgeResponse'
+        '400':
+          description: Missing campaignId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/v1/audit-logs:
     get:
@@ -1425,7 +1623,10 @@ paths:
                   type: string
       responses:
         '202':
-          description: Job queued; returns created/skipped counts
+          description: >-
+            Submission enqueued on the durable job queue; returns { ok, campaignId, jobId, status:
+            "queued" } immediately. Poll GET on this same path to see rows move pending ->
+            created/failed.
         '404':
           description: Campaign not found
     get:
@@ -1535,8 +1736,8 @@ components:
           description: Campaign end date
         status:
           type: string
-          enum: [active, upcoming, ended]
-          description: Computed campaign status
+          enum: [draft, published, archived]
+          description: Campaign publish-workflow status
         createdAt:
           type: string
           format: date-time
@@ -1892,6 +2093,17 @@ components:
           type: string
         label:
           type: string
+        orgId:
+          type: string
+          nullable: true
+          description: Organization the key is scoped to, if any.
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiKeyScope'
+          description: Granular permissions granted to the key.
+        rateTier:
+          $ref: '#/components/schemas/ApiKeyRateTier'
         createdAt:
           type: string
           format: date-time
@@ -1905,6 +2117,53 @@ components:
           nullable: true
         active:
           type: boolean
+
+    ApiKeyScope:
+      type: string
+      enum: [campaigns:read, campaigns:write, allowlist:write, admin]
+
+    ApiKeyRateTier:
+      type: string
+      enum: [standard, pro, enterprise]
+      description: >-
+        Per-key rate-limit tier enforced by the rate limiter (#924). `standard`
+        is 60 req/min, `pro` is 300 req/min, `enterprise` is 1000 req/min.
+
+    PiiExportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        identifier:
+          type: string
+        exportedAt:
+          type: string
+          format: date-time
+        data:
+          type: object
+          description: >-
+            One key per off-chain table with at least one matching row (empty
+            tables are omitted). Values are arrays of the raw rows, except
+            push_subscriptions.p256dh/auth which are redacted.
+          additionalProperties:
+            type: array
+            items:
+              type: object
+
+    PiiPurgeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        purged:
+          type: array
+          items:
+            type: object
+            properties:
+              table:
+                type: string
+              count:
+                type: integer
 
     Error:
       type: object

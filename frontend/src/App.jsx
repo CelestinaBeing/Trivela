@@ -13,10 +13,14 @@ import RequireAdmin from './components/RequireAdmin';
 const Explore = lazy(() => import('./Explore'));
 const CampaignDetail = lazy(() => import('./CampaignDetail'));
 const CampaignLeaderboard = lazy(() => import('./CampaignLeaderboard'));
+const ReferralLeaderboard = lazy(() => import('./ReferralLeaderboard'));
+const ReferralLinkGenerator = lazy(() => import('./ReferralLinkGenerator'));
 const CampaignAnalytics = lazy(() => import('./CampaignAnalytics'));
+const OperatorAnalytics = lazy(() => import('./OperatorAnalytics'));
 const AdminCampaigns = lazy(() => import('./AdminCampaigns'));
 const About = lazy(() => import('./About'));
 const TransactionHistory = lazy(() => import('./TransactionHistory'));
+const ProofOfReserves = lazy(() => import('./ProofOfReserves'));
 const EmbedCampaign = lazy(() => import('./pages/EmbedCampaign'));
 const PublicProfile = lazy(() => import('./pages/PublicProfile'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
@@ -32,8 +36,10 @@ import {
   normalizeError,
 } from './stellar';
 import { logSafeEvent } from './lib/safeAnalytics';
+import { useToast } from './lib/toast/ToastProvider';
 
 export default function App() {
+  const toast = useToast();
   const [theme, setTheme] = useState(() => getPreferredTheme());
   const [runtimeConfig, setRuntimeConfig] = useState(() => getRuntimeConfig());
   const [walletAddress, setWalletAddress] = useState('');
@@ -122,6 +128,7 @@ export default function App() {
       const { address } = await connectWalletProvider(providerName);
       setWalletAddress(address);
       logSafeEvent('wallet_connected', { provider: providerName });
+      toast.success('Wallet connected');
       await loadWalletBalance(address);
     } catch (error) {
       setWalletAddress('');
@@ -129,6 +136,7 @@ export default function App() {
       const msg = normalizeError(error);
       setWalletError(msg);
       setShowWalletModal(true);
+      toast.error(msg);
     } finally {
       setIsWalletLoading(false);
     }
@@ -140,6 +148,7 @@ export default function App() {
     setWalletBalance('');
     setRewardsPoints('');
     setWalletError('');
+    toast.info('Wallet disconnected');
   };
 
   const handleChangeStellarNetwork = async (nextNetwork) => {
@@ -251,6 +260,40 @@ export default function App() {
             }
           />
           <Route
+            path="/campaign/:id/referrals"
+            element={
+              <ReferralLinkGenerator
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                stellarNetwork={runtimeConfig.stellar.network}
+                onChangeStellarNetwork={handleChangeStellarNetwork}
+                walletAddress={walletAddress}
+                walletBalance={walletBalance}
+                isWalletLoading={isWalletLoading}
+                isWalletBalanceLoading={isWalletBalanceLoading}
+                onConnectWallet={openWalletModal}
+                onDisconnectWallet={disconnectWallet}
+              />
+            }
+          />
+          <Route
+            path="/campaign/:id/referrals/leaderboard"
+            element={
+              <ReferralLeaderboard
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                stellarNetwork={runtimeConfig.stellar.network}
+                onChangeStellarNetwork={handleChangeStellarNetwork}
+                walletAddress={walletAddress}
+                walletBalance={walletBalance}
+                isWalletLoading={isWalletLoading}
+                isWalletBalanceLoading={isWalletBalanceLoading}
+                onConnectWallet={openWalletModal}
+                onDisconnectWallet={disconnectWallet}
+              />
+            }
+          />
+          <Route
             path="/admin/campaigns/:id/analytics"
             element={
               <RequireAdmin
@@ -313,6 +356,29 @@ export default function App() {
             }
           />
           <Route
+            path="/admin/analytics"
+            element={
+              <RequireAdmin
+                walletAddress={walletAddress}
+                onConnectWallet={openWalletModal}
+                isWalletLoading={isWalletLoading}
+              >
+                <OperatorAnalytics
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  stellarNetwork={runtimeConfig.stellar.network}
+                  onChangeStellarNetwork={handleChangeStellarNetwork}
+                  walletAddress={walletAddress}
+                  walletBalance={walletBalance}
+                  isWalletLoading={isWalletLoading}
+                  isWalletBalanceLoading={isWalletBalanceLoading}
+                  onConnectWallet={openWalletModal}
+                  onDisconnectWallet={disconnectWallet}
+                />
+              </RequireAdmin>
+            }
+          />
+          <Route
             path="/admin/webhooks"
             element={
               <RequireAdmin
@@ -357,6 +423,10 @@ export default function App() {
                 onDisconnectWallet={disconnectWallet}
               />
             }
+          />
+          <Route
+            path="/proof-of-reserves"
+            element={<ProofOfReserves theme={theme} />}
           />
           <Route path="/embed/campaign/:id" element={<EmbedCampaign />} />
           <Route path="/u/:address" element={<PublicProfile />} />

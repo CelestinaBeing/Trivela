@@ -44,3 +44,20 @@ jobs:
       - name: Test backend (OpenAPI contract tests)
         run: npm run test:contract --workspace=backend
         timeout-minutes: 1
+
+      - name: Test backend (API response snapshots)
+        run: npm run test:snapshots --workspace=backend
+        timeout-minutes: 1
+
+      - name: Check for snapshot changes
+        run: |
+          if [ -n "$(git status --porcelain backend/src/tests/__snapshots__/)" ]; then
+            echo "❌ Snapshot files have uncommitted changes!"
+            echo "If these changes are intentional, run: npm run test:snapshots:update --workspace=backend"
+            echo "Then commit the updated snapshots."
+            echo ""
+            git diff backend/src/tests/__snapshots__/
+            exit 1
+          else
+            echo "✅ All snapshots match"
+          fi

@@ -12,7 +12,9 @@ export class RabetProvider extends WalletProvider {
 
   getApi() {
     if (!window.rabet) {
-      throw new Error('Rabet API is unavailable. Install or unlock the Rabet browser extension.');
+      throw new Error(
+        'Rabet is not installed. Please install the Rabet browser extension from https://rabet.io and reload the page.',
+      );
     }
     return window.rabet;
   }
@@ -50,14 +52,25 @@ export class RabetProvider extends WalletProvider {
     const api = this.getApi();
     const result = await api.connect();
     if (!result?.publicKey) {
-      throw new Error('No address available. Please connect your wallet first.');
+      throw new Error('No address available. Please connect your Rabet wallet first.');
     }
     return result.publicKey;
   }
 
+  async getNetwork() {
+    const api = this.getApi();
+    // Rabet's connect() response includes the active network passphrase.
+    const result = await api.connect();
+    if (!result?.network) {
+      throw new Error('Rabet did not return a network passphrase.');
+    }
+    return result.network;
+  }
+
   async signTransaction(xdr, options = {}) {
     const api = this.getApi();
-    const result = await api.sign(xdr, options.networkPassphrase);
+    const networkPassphrase = options.networkPassphrase ?? (await this.getNetwork());
+    const result = await api.sign(xdr, networkPassphrase);
     if (!result?.xdr) {
       throw new Error('Rabet did not return a signed transaction.');
     }

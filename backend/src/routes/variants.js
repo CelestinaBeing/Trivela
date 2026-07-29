@@ -7,6 +7,7 @@ import {
   variantResultSchema,
   formatZodErrors,
 } from '../schemas.js';
+import { log } from '../middleware/logger.js';
 
 /**
  * Creates variant routes for A/B testing
@@ -14,8 +15,9 @@ import {
  * @param {ReturnType<import('../dal/sqliteVariantRepository.js').createSqliteVariantRepository>} deps.variantRepo
  * @param {ReturnType<import('../services/variantService.js').createVariantService>} deps.variantService
  * @param {ReturnType<import('../dal/sqliteCampaignRepository.js').createSqliteCampaignRepository>} deps.campaignRepo
+ * @param {(req: import('express').Request, entry: { action: string, entity: string, entityId: string, diff: unknown }) => void} deps.recordAuditEntry
  */
-export function createVariantRoutes({ variantRepo, variantService, campaignRepo }) {
+export function createVariantRoutes({ variantRepo, variantService, campaignRepo, recordAuditEntry }) {
   const router = express.Router();
 
   // Create a new variant for a campaign
@@ -60,9 +62,16 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
         config: data.config,
       });
 
+      recordAuditEntry(req, {
+        action: 'create',
+        entity: 'variant',
+        entityId: variant.id,
+        diff: { campaignId, variantKey: data.variantKey, name: data.name, trafficWeight: data.trafficWeight, isControl: data.isControl, active: data.active },
+      });
+
       res.status(201).json(variant);
     } catch (error) {
-      console.error('Error creating variant:', error);
+      log.error({ err: error }, 'Error creating variant');
       res.status(500).json({
         error: 'Failed to create variant',
         message: error.message,
@@ -92,7 +101,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
         },
       });
     } catch (error) {
-      console.error('Error listing variants:', error);
+      log.error({ err: error }, 'Error listing variants');
       res.status(500).json({
         error: 'Failed to list variants',
         message: error.message,
@@ -113,7 +122,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       res.json(variant);
     } catch (error) {
-      console.error('Error getting variant:', error);
+      log.error({ err: error }, 'Error getting variant');
       res.status(500).json({
         error: 'Failed to get variant',
         message: error.message,
@@ -143,9 +152,16 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       const updated = variantRepo.updateVariant(variantId, validation.data);
 
+      recordAuditEntry(req, {
+        action: 'update',
+        entity: 'variant',
+        entityId: variantId,
+        diff: validation.data,
+      });
+
       res.json(updated);
     } catch (error) {
-      console.error('Error updating variant:', error);
+      log.error({ err: error }, 'Error updating variant');
       res.status(500).json({
         error: 'Failed to update variant',
         message: error.message,
@@ -167,12 +183,18 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
       const deleted = variantRepo.deleteVariant(variantId);
 
       if (deleted) {
+        recordAuditEntry(req, {
+          action: 'delete',
+          entity: 'variant',
+          entityId: variantId,
+          diff: null,
+        });
         res.status(204).send();
       } else {
         res.status(500).json({ error: 'Failed to delete variant' });
       }
     } catch (error) {
-      console.error('Error deleting variant:', error);
+      log.error({ err: error }, 'Error deleting variant');
       res.status(500).json({
         error: 'Failed to delete variant',
         message: error.message,
@@ -201,7 +223,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       res.json(assignment);
     } catch (error) {
-      console.error('Error assigning variant:', error);
+      log.error({ err: error }, 'Error assigning variant');
       res.status(500).json({
         error: 'Failed to assign variant',
         message: error.message,
@@ -222,7 +244,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       res.json(assignment);
     } catch (error) {
-      console.error('Error getting assignment:', error);
+      log.error({ err: error }, 'Error getting assignment');
       res.status(500).json({
         error: 'Failed to get assignment',
         message: error.message,
@@ -257,7 +279,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
 
       res.status(201).json(result);
     } catch (error) {
-      console.error('Error tracking result:', error);
+      log.error({ err: error }, 'Error tracking result');
       res.status(500).json({
         error: 'Failed to track result',
         message: error.message,
@@ -288,7 +310,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
         results: enrichedResults,
       });
     } catch (error) {
-      console.error('Error getting results:', error);
+      log.error({ err: error }, 'Error getting results');
       res.status(500).json({
         error: 'Failed to get results',
         message: error.message,
@@ -308,7 +330,7 @@ export function createVariantRoutes({ variantRepo, variantService, campaignRepo 
         stats,
       });
     } catch (error) {
-      console.error('Error getting assignment stats:', error);
+      log.error({ err: error }, 'Error getting assignment stats');
       res.status(500).json({
         error: 'Failed to get assignment stats',
         message: error.message,

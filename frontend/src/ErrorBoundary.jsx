@@ -49,11 +49,11 @@ export default class ErrorBoundary extends Component {
 
   render() {
     const { hasError, errorMessage, retryKey } = this.state;
-    const { children } = this.props;
+    const { children, as: Tag = 'main' } = this.props;
 
     if (hasError) {
       return (
-        <main className="error-boundary" role="alert" aria-live="assertive">
+        <Tag className="error-boundary" role="alert" aria-live="assertive">
           <div className="error-boundary-card">
             <p className="error-boundary-eyebrow">Oops</p>
             <h1 className="error-boundary-title">We hit an unexpected error</h1>
@@ -78,7 +78,7 @@ export default class ErrorBoundary extends Component {
               </button>
             </div>
           </div>
-        </main>
+        </Tag>
       );
     }
 

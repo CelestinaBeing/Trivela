@@ -96,6 +96,12 @@ pub enum Error {
     UnknownSigner = 122,
     /// Referral would create a direct cycle (A→B where B already refers A).
     ReferralLoop = 123,
+    /// A referral chain forms a cycle (A→B→…→A), which would enable infinite
+    /// recursive reward amplification. Walk bounded to 10 hops.
+    ReferralLoop = 123,
+    /// Participant already has a locked referral record from a prior registration
+    /// and cannot adopt a different referrer on re-registration (sybil guard).
+    ReferralLocked = 124,
 }
 
 contractmeta!(key = "Description", val = "Trivela campaign configuration");
@@ -121,6 +127,10 @@ pub const TTL_EXTEND_TO: u32 = 100;
 const ADMIN: Symbol = symbol_short!("admin");
 const CAMPAIGN_ACTIVE: Symbol = symbol_short!("active");
 const PARTICIPANT: Symbol = symbol_short!("partic");
+// Participation history marker (issue #740): persists across deregistration
+// and merkle root rotations so the same identity cannot double-register or
+// inflate referral counts by cycling de/re-register.
+const PARTICIPATED: Symbol = symbol_short!("ptcipd");
 const START_TIME: Symbol = symbol_short!("start");
 const END_TIME: Symbol = symbol_short!("end");
 const MAX_CAP: Symbol = symbol_short!("maxcap");
@@ -176,6 +186,11 @@ const REFERRAL: Symbol = symbol_short!("referral");
 const REFERRAL_LOCK: Symbol = symbol_short!("reflock");
 const REFERRAL_COUNT: Symbol = symbol_short!("refcnt");
 const REFERRED_EVENT: Symbol = symbol_short!("referred");
+// Set to `true` on first registration so re-registration cannot switch to a
+// different referrer (sybil guard — issue #743). Persists through deregister.
+const REFERRAL_LOCKED: Symbol = symbol_short!("reflck");
+/// Maximum referral chain depth checked for cycles (issue #743).
+const MAX_REFERRAL_DEPTH: u32 = 10;
 
 // ── Activity log ring buffer (issue #453) ────────────────────────────────────
 //
@@ -924,9 +939,29 @@ impl CampaignContract {
             None
         };
 
-        let was_new = do_register(&env, participant, referrer)?;
+        // Participation barrier (issue #740): reject any participant whose
+        // history marker is set, even after deregistration or root rotation.
+        let participation_key = (PARTICIPATED, participant.clone());
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&participation_key)
+            .unwrap_or(false)
+        {
+            return Err(Error::NullifierAlreadyUsed);
+        }
+
+        let was_new = do_register(&env, participant.clone(), referrer)?;
 
         if was_new {
+            // Stamp the participation history so this identity cannot
+            // re-register after deregistration or across root rotations.
+            env.storage().persistent().set(&participation_key, &true);
+            env.storage().persistent().extend_ttl(
+                &participation_key,
+                PARTICIPANT_TTL_THRESHOLD,
+                PARTICIPANT_TTL_EXTEND_TO,
+            );
             if let Some(hash) = invite_hash {
                 env.storage().instance().set(&(INVITE_USED, hash), &true);
             }
@@ -973,6 +1008,39 @@ impl CampaignContract {
     ) -> Result<bool, Error> {
         require_admin_with_nonce(&env, &admin, nonce)?;
         Ok(do_deregister(&env, participant))
+    }
+
+    /// Explicitly clear the participation history for a participant (issue #740).
+    ///
+    /// Once cleared, the participant may re-register as if they had never
+    /// participated. The admin must decide whether this is appropriate (e.g.
+    /// for an erroneously blocked address). Separate from `admin_deregister`
+    /// so clearing participation is always an explicit, auditable opt-in.
+    pub fn clear_participation(
+        env: Env,
+        admin: Address,
+        nonce: u64,
+        participant: Address,
+    ) -> Result<(), Error> {
+        require_admin_with_nonce(&env, &admin, nonce)?;
+        env.storage()
+            .persistent()
+            .remove(&(PARTICIPATED, participant));
+        env.storage()
+            .instance()
+            .extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+        Ok(())
+    }
+
+    /// Check whether the participation history marker is set for an address.
+    ///
+    /// Returns `true` even if the participant has since deregistered — this
+    /// is intentional: the marker persists to prevent re-registration.
+    pub fn has_participated(env: Env, participant: Address) -> bool {
+        env.storage()
+            .persistent()
+            .get::<_, bool>(&(PARTICIPATED, participant))
+            .unwrap_or(false)
     }
 
     /// Check if a participant is registered. (#280) Reads from
@@ -1475,6 +1543,9 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
     // On-chain referral validation (issue #455 / #743).
     if let Some(ref referrer) = referrer {
         if referrer == &participant {
+    // On-chain referral validation (issues #455, #743).
+    if let Some(ref referrer) = referrer {
+        if *referrer == participant {
             return Err(Error::SelfReferral);
         }
 
@@ -1523,6 +1594,34 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
                 PARTICIPANT_TTL_THRESHOLD,
                 PARTICIPANT_TTL_EXTEND_TO,
             );
+        // Sybil guard (#743): if participant was ever registered before,
+        // their referral record is locked and cannot be changed.
+        let lock_key = (REFERRAL_LOCKED, participant.clone());
+        if env.storage().persistent().get::<_, bool>(&lock_key).unwrap_or(false) {
+            let existing: Option<Address> = env
+                .storage()
+                .persistent()
+                .get(&(REFERRAL, participant.clone()));
+            // Allow re-registration only if the referrer is identical.
+            if existing.as_ref() != Some(referrer) {
+                return Err(Error::ReferralLocked);
+            }
+        }
+
+        // Loop detection (#743): walk the referral chain up to MAX_REFERRAL_DEPTH
+        // hops. If participant appears anywhere in the chain the new edge would
+        // form a cycle, enabling infinite recursive reward amplification.
+        let mut cursor: Address = referrer.clone();
+        for _ in 0..MAX_REFERRAL_DEPTH {
+            let parent: Option<Address> = env
+                .storage()
+                .persistent()
+                .get(&(REFERRAL, cursor.clone()));
+            match parent {
+                None => break,
+                Some(p) if p == participant => return Err(Error::ReferralLoop),
+                Some(p) => cursor = p,
+            }
         }
     }
 
@@ -1601,6 +1700,26 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
                 PARTICIPANT_TTL_THRESHOLD,
                 PARTICIPANT_TTL_EXTEND_TO,
             );
+        // Stamp the referral-lock so this participant cannot adopt a different
+        // referrer if they deregister and re-register (#743 sybil guard).
+        let lock_key = (REFERRAL_LOCKED, participant.clone());
+        env.storage().persistent().set(&lock_key, &true);
+        env.storage().persistent().extend_ttl(
+            &lock_key,
+            PARTICIPANT_TTL_THRESHOLD,
+            PARTICIPANT_TTL_EXTEND_TO,
+        );
+
+        let count_key = (REFERRAL_COUNT, referrer.clone());
+        let referral_total: u64 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&count_key, &(referral_total + 1));
+        env.storage().persistent().extend_ttl(
+            &count_key,
+            PARTICIPANT_TTL_THRESHOLD,
+            PARTICIPANT_TTL_EXTEND_TO,
+        );
 
             env.events()
                 .publish((REFERRED_EVENT, participant, referrer), ());

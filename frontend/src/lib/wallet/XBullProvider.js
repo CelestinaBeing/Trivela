@@ -65,4 +65,22 @@ export class XBullProvider extends WalletProvider {
     }
     return signedXdr;
   }
+
+  async getNetwork() {
+    try {
+      const api = this.getApi();
+      if (typeof api.getNetwork === 'function') {
+        const result = await api.getNetwork();
+        return result ?? null;
+      }
+      // xBull SDK <2.x exposes networkDetails on the connection object
+      if (typeof api.getNetworkDetails === 'function') {
+        const details = await api.getNetworkDetails();
+        return details?.networkPassphrase ?? null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
 }

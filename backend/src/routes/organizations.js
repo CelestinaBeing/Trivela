@@ -37,7 +37,7 @@ export function createOrganizationRoutes(dal) {
         });
       }
 
-      await dal.auditLogs.log({
+      await dal.auditLogs.create({
         entity: 'organization',
         entityId: organization.id,
         action: 'create',
@@ -88,7 +88,7 @@ export function createOrganizationRoutes(dal) {
         });
       }
 
-      await dal.auditLogs.log({
+      await dal.auditLogs.create({
         entity: 'organization',
         entityId: organization.id,
         action: 'update',
@@ -117,7 +117,7 @@ export function createOrganizationRoutes(dal) {
         });
       }
 
-      await dal.auditLogs.log({
+      await dal.auditLogs.create({
         entity: 'organization',
         entityId: req.params.id,
         action: 'delete',
@@ -257,7 +257,7 @@ export function createOrganizationRoutes(dal) {
         invitedBy: req.auth?.email || 'system',
       });
 
-      await dal.auditLogs.log({
+      await dal.auditLogs.create({
         entity: 'organization_invitation',
         entityId: result.invitation?.id,
         action: 'create',
