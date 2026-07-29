@@ -15,6 +15,8 @@ const PII_TABLES = [
   { table: 'allowlists', columns: ['address'] },
   { table: 'notifications', columns: ['user_id'] },
   { table: 'notification_channel_settings', columns: ['user_id'] },
+  { table: 'notification_preferences', columns: ['user_address'] },
+  { table: 'unsubscribe_tokens', columns: ['user_address'] },
   { table: 'push_subscriptions', columns: ['user'] },
   { table: 'claimable_balances', columns: ['user_address'] },
   { table: 'user_activities', columns: ['user_address'] },
@@ -94,6 +96,51 @@ export function purgePiiForUser(db, identifier) {
   }
 
   return { purged };
+}
+
+/**
+ * Fields that hold raw Web Push credential material rather than
+ * human-meaningful data — replaced with a presence marker in exports so a
+ * GDPR data-access request doesn't hand out live push-subscription secrets.
+ */
+const REDACTED_FIELDS = {
+  push_subscriptions: ['p256dh', 'auth'],
+};
+
+/**
+ * Export all PII for a specific user (wallet address or email), for GDPR
+ * "right of access" requests. Reuses the same PII_TABLES map as
+ * purgePiiForUser so "which tables hold this identifier" is defined once.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} identifier - Wallet address or email to export
+ * @returns {{ identifier: string, exportedAt: string, data: Record<string, object[]> }}
+ */
+export function exportPiiForUser(db, identifier) {
+  const data = {};
+
+  for (const { table, columns } of PII_TABLES) {
+    try {
+      const where = columns.map((c) => `${c} = ?`).join(' OR ');
+      const rows = db
+        .prepare(`SELECT * FROM ${table} WHERE ${where}`)
+        .all(...columns.map(() => identifier));
+
+      if (rows.length > 0) {
+        const redact = REDACTED_FIELDS[table];
+        data[table] = redact
+          ? rows.map((row) => ({
+              ...row,
+              ...Object.fromEntries(redact.map((field) => [field, '[REDACTED]'])),
+            }))
+          : rows;
+      }
+    } catch (err) {
+      log.warn(`[pii-export] Failed to query ${table}: ${err.message}`);
+    }
+  }
+
+  return { identifier, exportedAt: new Date().toISOString(), data };
 }
 
 /**
