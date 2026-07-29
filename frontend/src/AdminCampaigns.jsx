@@ -112,6 +112,9 @@ export default function AdminCampaigns({
                   </li>
                 ))}
               </ul>
+              <Link to="/admin/analytics" className="btn btn-primary" style={{ marginTop: '1rem', display: 'inline-block' }}>
+                Operator Analytics Dashboard
+              </Link>
             </section>
           ) : null}
           {/* #294 — Merkle allowlist generator. Computes the tree

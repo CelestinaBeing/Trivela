@@ -14,7 +14,9 @@ const Explore = lazy(() => import('./Explore'));
 const CampaignDetail = lazy(() => import('./CampaignDetail'));
 const CampaignLeaderboard = lazy(() => import('./CampaignLeaderboard'));
 const ReferralLeaderboard = lazy(() => import('./ReferralLeaderboard'));
+const ReferralLinkGenerator = lazy(() => import('./ReferralLinkGenerator'));
 const CampaignAnalytics = lazy(() => import('./CampaignAnalytics'));
+const OperatorAnalytics = lazy(() => import('./OperatorAnalytics'));
 const AdminCampaigns = lazy(() => import('./AdminCampaigns'));
 const About = lazy(() => import('./About'));
 const TransactionHistory = lazy(() => import('./TransactionHistory'));
@@ -257,6 +259,23 @@ export default function App() {
             }
           />
           <Route
+            path="/campaign/:id/referrals"
+            element={
+              <ReferralLinkGenerator
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                stellarNetwork={runtimeConfig.stellar.network}
+                onChangeStellarNetwork={handleChangeStellarNetwork}
+                walletAddress={walletAddress}
+                walletBalance={walletBalance}
+                isWalletLoading={isWalletLoading}
+                isWalletBalanceLoading={isWalletBalanceLoading}
+                onConnectWallet={openWalletModal}
+                onDisconnectWallet={disconnectWallet}
+              />
+            }
+          />
+          <Route
             path="/campaign/:id/referrals/leaderboard"
             element={
               <ReferralLeaderboard
@@ -331,6 +350,29 @@ export default function App() {
                   standalone
                   campaigns={[]}
                   onCampaignCreated={(c) => navigate(`/campaign/${c.id}`)}
+                />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="/admin/analytics"
+            element={
+              <RequireAdmin
+                walletAddress={walletAddress}
+                onConnectWallet={openWalletModal}
+                isWalletLoading={isWalletLoading}
+              >
+                <OperatorAnalytics
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  stellarNetwork={runtimeConfig.stellar.network}
+                  onChangeStellarNetwork={handleChangeStellarNetwork}
+                  walletAddress={walletAddress}
+                  walletBalance={walletBalance}
+                  isWalletLoading={isWalletLoading}
+                  isWalletBalanceLoading={isWalletBalanceLoading}
+                  onConnectWallet={openWalletModal}
+                  onDisconnectWallet={disconnectWallet}
                 />
               </RequireAdmin>
             }
