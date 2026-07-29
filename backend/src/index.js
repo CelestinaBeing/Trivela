@@ -43,6 +43,12 @@ import {
   apiKeyRateTierUpdateSchema,
   formatZodErrors,
 } from './schemas.js';
+import { createProbeHandlers } from './middleware/probes.js';
+import { defaultCacheService } from './services/cacheService.js';
+import { createCacheMiddleware } from './middleware/cacheMiddleware.js';
+import { validateBody, validateQuery } from './middleware/validateRequest.js';
+import { createGraphQLHandler } from './graphql/graphqlHandler.js';
+import { GraphQLSchemaExecutor } from './graphql/graphqlSchema.js';
 import { createStorageAdapter } from './storage/index.js';
 import {
   uploadCampaignImage,
@@ -916,12 +922,24 @@ export async function createApp(options = {}) {
     res.json(payload);
   });
 
+  const probeHandlers = createProbeHandlers({ getIsShuttingDown: () => isShuttingDown });
+  app.get('/health/live', probeHandlers.livenessHandler);
+  app.get('/health/ready', probeHandlers.readinessHandler);
+  app.get('/livez', probeHandlers.livenessHandler);
+  app.get('/readyz', probeHandlers.readinessHandler);
+  app.get('/healthz', probeHandlers.livenessHandler);
+
   app.get('/ready', (_req, res) => {
     if (isShuttingDown) {
       return res.status(503).json({ status: 'shutting_down', ready: false });
     }
     return res.json({ status: 'ok', ready: true });
   });
+
+  const graphqlHandler = createGraphQLHandler({
+    executor: new GraphQLSchemaExecutor({ campaignRepository, indexerRepository }),
+  });
+  app.all('/graphql', defaultRateLimiter, graphqlHandler);
 
   const siteOrigin =
     process.env.SITE_ORIGIN ?? allowedOrigins.find((origin) => origin !== '*') ?? '';
@@ -3276,6 +3294,7 @@ export async function startServer(options = {}) {
   async function gracefulShutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
+    isShuttingDown = true;
     app._close?.();
     log.info({ signal, graceMs: SHUTDOWN_GRACE_MS }, 'graceful shutdown started');
 
