@@ -1,7 +1,10 @@
 // Notification service for creating in-app notifications when key events occur.
 // Issue #914 — in-app notifications for credits, claims, and unlocks.
 
-import { logger } from '../lib/logger.js';
+// Bug fix (unrelated to #927, but blocked verifying it): this imported a
+// module that doesn't exist, crashing every test/boot path that transitively
+// loads index.js -> notificationService.js.
+import { log as logger } from '../middleware/logger.js';
 
 /**
  * @param {{
