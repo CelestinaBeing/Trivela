@@ -1,6 +1,6 @@
 // @ts-check
 import { z } from 'zod';
-import { DEFAULT_CATEGORIES } from './dal/sqliteCampaignRepository.js';
+export const DEFAULT_CATEGORIES = ['DeFi', 'NFT', 'Community', 'Airdrop'];
 import { VALID_RATE_TIERS } from './config/rateTiers.js';
 
 const isoDateOrNull = z
