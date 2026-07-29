@@ -127,6 +127,14 @@ pub enum Error {
     ZeroAmount = 30,
     /// Transfer source and destination cannot be the same address (issue #1020).
     SelfTransfer = 31,
+    /// No clawback proposal found for the given id.
+    ClawbackNotFound = 32,
+    /// The timelock delay for this clawback has not yet elapsed.
+    ClawbackTimelocked = 33,
+    /// Clawback amount exceeds the target's current unclaimed balance.
+    ClawbackOverspend = 34,
+    /// Only the configured guardian (admin) may cancel a clawback proposal.
+    ClawbackGuardianOnly = 35,
 }
 
 /// Vesting schedule record stored per user per vest_id.
@@ -345,6 +353,41 @@ const ALLOWANCE: Symbol = symbol_short!("allow");
 const SEP41_TRANSFER_EVENT: Symbol = symbol_short!("transfer");
 const SEP41_APPROVE_EVENT: Symbol = symbol_short!("approve");
 const SEP41_BURN_EVENT: Symbol = symbol_short!("burn");
+
+// ── Timelocked clawback (issue #729) ─────────────────────────────────────────
+//
+// A clawback proposal reserves `amount` from a target's unclaimed balance
+// and queues an admin-initiated credit removal. The guardian (admin) may
+// cancel within the timelock window. After the delay elapses, anyone can
+// execute. Only unclaimed points may be clawed back (issued but not yet
+// redeemed), so the credit→balance ledger conservation invariant holds.
+//
+// Storage layout:
+//   (CLAWBACK_PROPOSAL, u32) -> ClawbackProposal  (persistent)
+//   CLAWBACK_NONCE            -> u32               (instance — monotonic counter)
+
+const CLAWBACK_PROPOSAL: Symbol = symbol_short!("clwbprop");
+const CLAWBACK_NONCE: Symbol = symbol_short!("clwbnonce");
+/// Minimum ledgers that must pass before a clawback can be executed.
+/// At ~5 s/ledger this is roughly 7 days on mainnet.
+const CLAWBACK_TIMELOCK_LEDGERS: u32 = 120_960;
+const CLAWBACK_PROPOSE_EVENT: Symbol = symbol_short!("clwbprop");
+const CLAWBACK_CANCEL_EVENT: Symbol = symbol_short!("clwbcanc");
+const CLAWBACK_EXECUTE_EVENT: Symbol = symbol_short!("clwbexec");
+
+/// Proposal record stored under `(CLAWBACK_PROPOSAL, id)`.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ClawbackProposal {
+    pub target: Address,
+    pub amount: u64,
+    /// Ledger sequence number when the proposal was created.
+    pub proposed_at: u32,
+    /// True once cancelled so stale proposals don't appear as pending.
+    pub cancelled: bool,
+    /// True once executed so replay is impossible.
+    pub executed: bool,
+}
 
 #[contract]
 pub struct RewardsContract;
@@ -2431,6 +2474,135 @@ impl RewardsContract {
             .instance()
             .get(&MULTISIG_THRESHOLD)
             .unwrap_or(0)
+    }
+
+    // ── Timelocked clawback (issue #729) ─────────────────────────────────────
+
+    /// Propose a clawback of `amount` unclaimed points from `target`.
+    /// Returns the proposal id. Admin-only; the clawback cannot be executed
+    /// until `CLAWBACK_TIMELOCK_LEDGERS` have elapsed so the target has time
+    /// to dispute. The guardian (admin) can cancel within that window.
+    pub fn propose_clawback(
+        env: Env,
+        caller: Address,
+        target: Address,
+        amount: u64,
+    ) -> Result<u32, Error> {
+        require_admin(&env, &caller)?;
+        if amount == 0 {
+            return Err(Error::ZeroAmount);
+        }
+        let balance: u64 = env
+            .storage()
+            .instance()
+            .get(&(BALANCE, target.clone()))
+            .unwrap_or(0);
+        if amount > balance {
+            return Err(Error::ClawbackOverspend);
+        }
+
+        let id: u32 = env
+            .storage()
+            .instance()
+            .get(&CLAWBACK_NONCE)
+            .unwrap_or(0);
+        let next_id = id + 1;
+        env.storage().instance().set(&CLAWBACK_NONCE, &next_id);
+
+        let proposal = ClawbackProposal {
+            target: target.clone(),
+            amount,
+            proposed_at: env.ledger().sequence(),
+            cancelled: false,
+            executed: false,
+        };
+        let key = (CLAWBACK_PROPOSAL, id);
+        env.storage().persistent().set(&key, &proposal);
+        env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+
+        env.events().publish((CLAWBACK_PROPOSE_EVENT, id), (target, amount));
+        Ok(id)
+    }
+
+    /// Cancel a pending clawback proposal. Only the admin (guardian) may cancel.
+    /// Cancelled proposals can never be executed.
+    pub fn cancel_clawback(env: Env, caller: Address, proposal_id: u32) -> Result<(), Error> {
+        caller.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&ADMIN).unwrap();
+        if caller != stored_admin {
+            return Err(Error::ClawbackGuardianOnly);
+        }
+
+        let key = (CLAWBACK_PROPOSAL, proposal_id);
+        let mut proposal: ClawbackProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ClawbackNotFound)?;
+
+        if proposal.cancelled || proposal.executed {
+            return Err(Error::ClawbackNotFound);
+        }
+
+        proposal.cancelled = true;
+        env.storage().persistent().set(&key, &proposal);
+        env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+
+        env.events().publish((CLAWBACK_CANCEL_EVENT, proposal_id), ());
+        Ok(())
+    }
+
+    /// Execute a clawback proposal after the timelock has elapsed.
+    /// Deducts `amount` from the target's balance and total supply.
+    /// Anyone may call once the timelock is satisfied; replay is blocked by
+    /// the `executed` flag.
+    pub fn execute_clawback(env: Env, caller: Address, proposal_id: u32) -> Result<(), Error> {
+        caller.require_auth();
+
+        let key = (CLAWBACK_PROPOSAL, proposal_id);
+        let mut proposal: ClawbackProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ClawbackNotFound)?;
+
+        if proposal.cancelled || proposal.executed {
+            return Err(Error::ClawbackNotFound);
+        }
+
+        let elapsed = env.ledger().sequence().saturating_sub(proposal.proposed_at);
+        if elapsed < CLAWBACK_TIMELOCK_LEDGERS {
+            return Err(Error::ClawbackTimelocked);
+        }
+
+        let balance_key = (BALANCE, proposal.target.clone());
+        let balance: u64 = env
+            .storage()
+            .instance()
+            .get(&balance_key)
+            .unwrap_or(0);
+        if proposal.amount > balance {
+            return Err(Error::ClawbackOverspend);
+        }
+
+        let new_balance = balance - proposal.amount;
+        env.storage().instance().set(&balance_key, &new_balance);
+
+        let supply: u64 = env.storage().instance().get(&TOTAL_SUPPLY).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&TOTAL_SUPPLY, &supply.saturating_sub(proposal.amount));
+
+        proposal.executed = true;
+        env.storage().persistent().set(&key, &proposal);
+        env.storage().persistent().extend_ttl(&key, TTL_THRESHOLD, TTL_EXTEND_TO);
+        env.storage().instance().extend_ttl(TTL_THRESHOLD, TTL_EXTEND_TO);
+
+        env.events()
+            .publish((CLAWBACK_EXECUTE_EVENT, proposal_id), (proposal.target, proposal.amount));
+        Ok(())
     }
 }
 

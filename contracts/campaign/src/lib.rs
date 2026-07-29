@@ -94,6 +94,12 @@ pub enum Error {
     NonceReused = 120,
     DuplicateSigner = 121,
     UnknownSigner = 122,
+    /// A referral chain forms a cycle (A→B→…→A), which would enable infinite
+    /// recursive reward amplification. Walk bounded to 10 hops.
+    ReferralLoop = 123,
+    /// Participant already has a locked referral record from a prior registration
+    /// and cannot adopt a different referrer on re-registration (sybil guard).
+    ReferralLocked = 124,
 }
 
 contractmeta!(key = "Description", val = "Trivela campaign configuration");
@@ -174,6 +180,11 @@ const OP_SET_MERKLE_ROOT: u32 = 1;
 const REFERRAL: Symbol = symbol_short!("referral");
 const REFERRAL_COUNT: Symbol = symbol_short!("refcnt");
 const REFERRED_EVENT: Symbol = symbol_short!("referred");
+// Set to `true` on first registration so re-registration cannot switch to a
+// different referrer (sybil guard — issue #743). Persists through deregister.
+const REFERRAL_LOCKED: Symbol = symbol_short!("reflck");
+/// Maximum referral chain depth checked for cycles (issue #743).
+const MAX_REFERRAL_DEPTH: u32 = 10;
 
 // ── Activity log ring buffer (issue #453) ────────────────────────────────────
 //
@@ -1523,18 +1534,48 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
         return Ok(false);
     }
 
-    // On-chain referral validation (issue #455).
-    if let Some(referrer) = referrer.clone() {
-        if referrer == participant {
+    // On-chain referral validation (issues #455, #743).
+    if let Some(ref referrer) = referrer {
+        if *referrer == participant {
             return Err(Error::SelfReferral);
         }
         let referrer_registered: bool = env
             .storage()
             .persistent()
-            .get(&(PARTICIPANT, referrer))
+            .get(&(PARTICIPANT, referrer.clone()))
             .unwrap_or(false);
         if !referrer_registered {
             return Err(Error::ReferrerNotRegistered);
+        }
+
+        // Sybil guard (#743): if participant was ever registered before,
+        // their referral record is locked and cannot be changed.
+        let lock_key = (REFERRAL_LOCKED, participant.clone());
+        if env.storage().persistent().get::<_, bool>(&lock_key).unwrap_or(false) {
+            let existing: Option<Address> = env
+                .storage()
+                .persistent()
+                .get(&(REFERRAL, participant.clone()));
+            // Allow re-registration only if the referrer is identical.
+            if existing.as_ref() != Some(referrer) {
+                return Err(Error::ReferralLocked);
+            }
+        }
+
+        // Loop detection (#743): walk the referral chain up to MAX_REFERRAL_DEPTH
+        // hops. If participant appears anywhere in the chain the new edge would
+        // form a cycle, enabling infinite recursive reward amplification.
+        let mut cursor: Address = referrer.clone();
+        for _ in 0..MAX_REFERRAL_DEPTH {
+            let parent: Option<Address> = env
+                .storage()
+                .persistent()
+                .get(&(REFERRAL, cursor.clone()));
+            match parent {
+                None => break,
+                Some(p) if p == participant => return Err(Error::ReferralLoop),
+                Some(p) => cursor = p,
+            }
         }
     }
 
@@ -1588,6 +1629,16 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
         env.storage().persistent().set(&referral_key, &referrer);
         env.storage().persistent().extend_ttl(
             &referral_key,
+            PARTICIPANT_TTL_THRESHOLD,
+            PARTICIPANT_TTL_EXTEND_TO,
+        );
+
+        // Stamp the referral-lock so this participant cannot adopt a different
+        // referrer if they deregister and re-register (#743 sybil guard).
+        let lock_key = (REFERRAL_LOCKED, participant.clone());
+        env.storage().persistent().set(&lock_key, &true);
+        env.storage().persistent().extend_ttl(
+            &lock_key,
             PARTICIPANT_TTL_THRESHOLD,
             PARTICIPANT_TTL_EXTEND_TO,
         );

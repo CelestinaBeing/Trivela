@@ -1,9 +1,14 @@
 /**
  * Webhook Service
- * Handles webhook delivery and event dispatching
+ * Handles webhook delivery and event dispatching.
+ *
+ * Side-effects (deliveries) are queued via the transactional outbox (#746):
+ * call `dispatchEventTransactional(db, event)` to write the intent atomically
+ * alongside any DB state change, then the OutboxRelay delivers it.
  */
 
 import crypto from 'node:crypto';
+import { writeOutbox } from './outboxService.js';
 
 const WEBHOOK_EVENTS = {
   CAMPAIGN_CREATED: 'campaign.created',
@@ -132,6 +137,19 @@ export class WebhookService {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+  }
+
+  /**
+   * Write a webhook dispatch intent to the outbox atomically with the caller's
+   * DB transaction. The OutboxRelay will pick it up and call `dispatchEvent`.
+   *
+   * @param {import('better-sqlite3').Database} db - Must be inside an active
+   *   transaction started by the caller.
+   * @param {WebhookEvent} event
+   * @returns {number} Outbox row id.
+   */
+  enqueueEvent(db, event) {
+    return writeOutbox(db, event.type, event, { partitionKey: event.campaignId ?? '' });
   }
 
   /**
