@@ -214,13 +214,38 @@ export const variantResultSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+/** Schema for making a pledge / contribution. */
+export const pledgeSchema = z.object({
+  campaignId: z.union([z.string().trim().min(1), z.number().int().positive()], {
+    required_error: 'campaignId is required',
+  }),
+  amount: z
+    .number({ required_error: 'amount is required' })
+    .finite()
+    .positive('amount must be a positive number'),
+  userAddress: z
+    .string()
+    .trim()
+    .min(1, 'userAddress is required')
+    .optional(),
+});
+
+/** Schema for claiming a reward / payout. */
+export const claimSchema = z.object({
+  campaignId: z.union([z.string().trim().min(1), z.number().int().positive()], {
+    required_error: 'campaignId is required',
+  }),
+  userAddress: z.string().trim().min(1, 'userAddress is required').optional(),
+});
+
 /**
  * Formats Zod validation errors as human-readable strings with field paths.
  * @param {import('zod').ZodError} error
  * @returns {string[]}
  */
 export function formatZodErrors(error) {
-  return error.errors.map((issue) => {
+  const issues = error.issues || error.errors || [];
+  return issues.map((issue) => {
     const path = issue.path.join('.');
     return path ? `${path}: ${issue.message}` : issue.message;
   });
