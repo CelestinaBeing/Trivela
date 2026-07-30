@@ -39,7 +39,12 @@ export default function RewardsAdminPanel() {
   const [multisigRequired, setMultisigRequired] = useState('');
   const [coAdminAddress, setCoAdminAddress] = useState('');
 
-  const [confirmationDialog, setConfirmationDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+  const [confirmationDialog, setConfirmationDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: null,
+  });
 
   const pauseCreditId = useId();
   const pauseClaimId = useId();
@@ -78,17 +83,25 @@ export default function RewardsAdminPanel() {
         contractId,
       });
 
-      const [isPaused, isPausedCredit, isPausedClaim, isPausedRedeem, redemptionReserve, rateLimit, maxCreditPerCall, multisigThreshold] =
-        await Promise.all([
-          client.is_paused().then((tx) => tx.simulate()),
-          client.is_paused_credit().then((tx) => tx.simulate()),
-          client.is_paused_claim().then((tx) => tx.simulate()),
-          client.is_paused_redeem().then((tx) => tx.simulate()),
-          client.redemption_reserve().then((tx) => tx.simulate()),
-          client.get_credit_rate_limit().then((tx) => tx.simulate()),
-          client.max_credit_per_call().then((tx) => tx.simulate()),
-          client.multisig_threshold().then((tx) => tx.simulate()),
-        ]);
+      const [
+        isPaused,
+        isPausedCredit,
+        isPausedClaim,
+        isPausedRedeem,
+        redemptionReserve,
+        rateLimit,
+        maxCreditPerCall,
+        multisigThreshold,
+      ] = await Promise.all([
+        client.is_paused().then((tx) => tx.simulate()),
+        client.is_paused_credit().then((tx) => tx.simulate()),
+        client.is_paused_claim().then((tx) => tx.simulate()),
+        client.is_paused_redeem().then((tx) => tx.simulate()),
+        client.redemption_reserve().then((tx) => tx.simulate()),
+        client.get_credit_rate_limit().then((tx) => tx.simulate()),
+        client.max_credit_per_call().then((tx) => tx.simulate()),
+        client.multisig_threshold().then((tx) => tx.simulate()),
+      ]);
 
       setRewardsState({
         isPaused,
@@ -237,9 +250,15 @@ export default function RewardsAdminPanel() {
           max_calls: max,
           window_ledgers: window,
         }),
-      max === 0 ? 'Credit rate limit disabled' : `Credit rate limit set to ${max} calls per ${window} ledgers`,
+      max === 0
+        ? 'Credit rate limit disabled'
+        : `Credit rate limit set to ${max} calls per ${window} ledgers`,
     );
-    logSafeEvent('admin_set_credit_rate_limit', { max_calls: max, window_ledgers: window, walletAddress });
+    logSafeEvent('admin_set_credit_rate_limit', {
+      max_calls: max,
+      window_ledgers: window,
+      walletAddress,
+    });
   };
 
   const handleSetMaxCreditPerCall = async () => {
@@ -253,7 +272,10 @@ export default function RewardsAdminPanel() {
         }),
       maxAmount === 0n ? 'Max credit per call disabled' : `Max credit per call set to ${maxAmount}`,
     );
-    logSafeEvent('admin_set_max_credit_per_call', { max_amount: maxAmount.toString(), walletAddress });
+    logSafeEvent('admin_set_max_credit_per_call', {
+      max_amount: maxAmount.toString(),
+      walletAddress,
+    });
   };
 
   const handleFundReserve = async () => {
@@ -365,7 +387,9 @@ export default function RewardsAdminPanel() {
         title={confirmationDialog.title}
         message={confirmationDialog.message}
         onConfirm={confirmationDialog.onConfirm}
-        onCancel={() => setConfirmationDialog({ isOpen: false, title: '', message: '', onConfirm: null })}
+        onCancel={() =>
+          setConfirmationDialog({ isOpen: false, title: '', message: '', onConfirm: null })
+        }
       />
 
       <div className="admin-header">
@@ -420,19 +444,25 @@ export default function RewardsAdminPanel() {
             </div>
             <div className="status-item">
               <label>Credit Paused</label>
-              <span className={`status-badge ${rewardsState.isPausedCredit ? 'active' : 'inactive'}`}>
+              <span
+                className={`status-badge ${rewardsState.isPausedCredit ? 'active' : 'inactive'}`}
+              >
                 {rewardsState.isPausedCredit ? 'Paused' : 'Active'}
               </span>
             </div>
             <div className="status-item">
               <label>Claim Paused</label>
-              <span className={`status-badge ${rewardsState.isPausedClaim ? 'active' : 'inactive'}`}>
+              <span
+                className={`status-badge ${rewardsState.isPausedClaim ? 'active' : 'inactive'}`}
+              >
                 {rewardsState.isPausedClaim ? 'Paused' : 'Active'}
               </span>
             </div>
             <div className="status-item">
               <label>Redeem Paused</label>
-              <span className={`status-badge ${rewardsState.isPausedRedeem ? 'active' : 'inactive'}`}>
+              <span
+                className={`status-badge ${rewardsState.isPausedRedeem ? 'active' : 'inactive'}`}
+              >
                 {rewardsState.isPausedRedeem ? 'Paused' : 'Active'}
               </span>
             </div>
@@ -451,13 +481,17 @@ export default function RewardsAdminPanel() {
             <div className="status-item">
               <label>Max Credit/Call</label>
               <span>
-                {rewardsState.maxCreditPerCall === 0n ? 'Unlimited' : rewardsState.maxCreditPerCall.toString()}
+                {rewardsState.maxCreditPerCall === 0n
+                  ? 'Unlimited'
+                  : rewardsState.maxCreditPerCall.toString()}
               </span>
             </div>
             <div className="status-item">
               <label>Multisig Threshold</label>
               <span>
-                {rewardsState.multisigThreshold === 0 ? 'Disabled' : `${rewardsState.multisigThreshold}-of-N`}
+                {rewardsState.multisigThreshold === 0
+                  ? 'Disabled'
+                  : `${rewardsState.multisigThreshold}-of-N`}
               </span>
             </div>
           </div>
@@ -487,7 +521,9 @@ export default function RewardsAdminPanel() {
               <small>Blocks credit, batch_credit, credit_vested, credit_by_rank</small>
               <button
                 onClick={handleSetPausedCredit}
-                disabled={isLoading || !walletAddress || pauseCredit === rewardsState.isPausedCredit}
+                disabled={
+                  isLoading || !walletAddress || pauseCredit === rewardsState.isPausedCredit
+                }
                 className="btn btn-primary"
               >
                 {pauseCredit ? 'Pause Credit' : 'Unpause Credit'}
@@ -529,7 +565,9 @@ export default function RewardsAdminPanel() {
               <small>Blocks redeem</small>
               <button
                 onClick={handleSetPausedRedeem}
-                disabled={isLoading || !walletAddress || pauseRedeem === rewardsState.isPausedRedeem}
+                disabled={
+                  isLoading || !walletAddress || pauseRedeem === rewardsState.isPausedRedeem
+                }
                 className="btn btn-primary"
               >
                 {pauseRedeem ? 'Pause Redeem' : 'Unpause Redeem'}
@@ -540,9 +578,7 @@ export default function RewardsAdminPanel() {
 
         <section className="admin-section">
           <h4>Rate Limits</h4>
-          <p className="section-description">
-            Control credit call frequency to prevent abuse.
-          </p>
+          <p className="section-description">Control credit call frequency to prevent abuse.</p>
           <div className="admin-field-group">
             <div className="admin-field">
               <label htmlFor={maxCallsId}>Max Calls Per Window</label>

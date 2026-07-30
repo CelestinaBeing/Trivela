@@ -32,20 +32,13 @@ export default function ConfirmationDialog({ isOpen, title, message, onConfirm, 
       aria-modal="true"
       aria-labelledby="confirmation-dialog-title"
     >
-      <div
-        className="confirmation-dialog"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="confirmation-dialog" onClick={(e) => e.stopPropagation()}>
         <h3 id="confirmation-dialog-title" className="confirmation-dialog-title">
           {title}
         </h3>
         <p className="confirmation-dialog-message">{message}</p>
         <div className="confirmation-dialog-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={onCancel}
-          >
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
             Cancel
           </button>
           <button

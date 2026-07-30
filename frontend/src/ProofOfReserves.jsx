@@ -50,8 +50,12 @@ export default function ProofOfReserves({ theme }) {
   }, [fetchSnapshot]);
 
   const ratio = snapshot?.solvencyRatio ?? null;
-  const reserve = snapshot ? snapshot.reserveXlm.toLocaleString(undefined, { maximumFractionDigits: 2 }) : null;
-  const liabilities = snapshot ? snapshot.liabilitiesXlm.toLocaleString(undefined, { maximumFractionDigits: 2 }) : null;
+  const reserve = snapshot
+    ? snapshot.reserveXlm.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : null;
+  const liabilities = snapshot
+    ? snapshot.liabilitiesXlm.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : null;
   const ttl = snapshot ? snapshot.contractTtlLedgers.toLocaleString() : null;
   const ratioDisplay = ratio !== null ? ratio.toFixed(4) : null;
 
@@ -60,16 +64,14 @@ export default function ProofOfReserves({ theme }) {
       <header className="por-header">
         <h1 className="por-title">Proof of Reserves</h1>
         <p className="por-subtitle">
-          Live on-chain verification that Trivela holds sufficient reserves to cover all
-          outstanding redeemable points. Data is pulled directly from the Soroban contract —
-          no off-chain intermediary.
+          Live on-chain verification that Trivela holds sufficient reserves to cover all outstanding
+          redeemable points. Data is pulled directly from the Soroban contract — no off-chain
+          intermediary.
         </p>
         <div className="por-status-row">
           <StatusBadge ratio={ratio} />
           {lastUpdated && (
-            <span className="por-updated">
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
+            <span className="por-updated">Updated {lastUpdated.toLocaleTimeString()}</span>
           )}
           <button
             className="btn btn-sm btn-ghost"
@@ -132,7 +134,9 @@ export default function ProofOfReserves({ theme }) {
             </a>{' '}
             and search for the Trivela contract address.
           </li>
-          <li>Read the <code>reserve</code> and <code>total_liabilities</code> storage entries.</li>
+          <li>
+            Read the <code>reserve</code> and <code>total_liabilities</code> storage entries.
+          </li>
           <li>Confirm they match the values shown above.</li>
         </ol>
         <p className="por-auto-update">

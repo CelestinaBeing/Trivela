@@ -121,7 +121,9 @@ export default function ReferralLinkGenerator({
             </nav>
             <div className="rlg-connect-prompt">
               <h2>Connect your wallet</h2>
-              <p>Connect your Stellar wallet to generate a referral link and track your referrals.</p>
+              <p>
+                Connect your Stellar wallet to generate a referral link and track your referrals.
+              </p>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -174,7 +176,11 @@ export default function ReferralLinkGenerator({
           ) : error ? (
             <div className="rlg-error" role="alert">
               <p>{error}</p>
-              <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => window.location.reload()}
+              >
                 Retry
               </button>
             </div>
@@ -220,7 +226,8 @@ export default function ReferralLinkGenerator({
                 </div>
                 {campaign?.referralBonusPoints > 0 && (
                   <p className="rlg-bonus-note">
-                    Earn <strong>+{campaign.referralBonusPoints} bonus points</strong> per friend who registers
+                    Earn <strong>+{campaign.referralBonusPoints} bonus points</strong> per friend
+                    who registers
                   </p>
                 )}
               </section>
@@ -287,10 +294,7 @@ export default function ReferralLinkGenerator({
               </section>
 
               <section className="rlg-leaderboard-link-section">
-                <Link
-                  to={`/campaign/${id}/referrals/leaderboard`}
-                  className="rlg-leaderboard-link"
-                >
+                <Link to={`/campaign/${id}/referrals/leaderboard`} className="rlg-leaderboard-link">
                   View Referral Leaderboard →
                 </Link>
               </section>

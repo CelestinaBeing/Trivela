@@ -3302,7 +3302,6 @@ export async function startServer(options = {}) {
   async function gracefulShutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    isShuttingDown = true;
     app._close?.();
     log.info({ signal, graceMs: SHUTDOWN_GRACE_MS }, 'graceful shutdown started');
 
