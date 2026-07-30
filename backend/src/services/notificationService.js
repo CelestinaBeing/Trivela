@@ -64,7 +64,12 @@ export function createNotificationService({
     if (emailEnabled && emailService && emailVars) {
       try {
         // Email sending would be implemented here when email provider is configured
-        logger.info?.({ event: 'email_notification_skipped', userId, type, reason: 'not_configured' });
+        logger.info?.({
+          event: 'email_notification_skipped',
+          userId,
+          type,
+          reason: 'not_configured',
+        });
       } catch (err) {
         logger.error?.({ event: 'email_notification_failed', userId, type, error: err.message });
       }

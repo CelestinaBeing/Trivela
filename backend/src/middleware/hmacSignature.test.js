@@ -44,8 +44,14 @@ function makeRes() {
   const res = {
     _status: 200,
     _body: null,
-    status(code) { this._status = code; return this; },
-    json(body) { this._body = body; return this; },
+    status(code) {
+      this._status = code;
+      return this;
+    },
+    json(body) {
+      this._body = body;
+      return this;
+    },
   };
   return res;
 }

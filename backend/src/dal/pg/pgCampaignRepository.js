@@ -95,7 +95,16 @@ export function createPgCampaignRepository({
 
   const seedPromise = maybeSeed();
 
-  async function list({ active, q, tags, category, includeHidden = false, includeDeleted = false, sort, order } = {}) {
+  async function list({
+    active,
+    q,
+    tags,
+    category,
+    includeHidden = false,
+    includeDeleted = false,
+    sort,
+    order,
+  } = {}) {
     await seedPromise;
 
     const where = [];
@@ -310,10 +319,10 @@ export function createPgCampaignRepository({
     );
     if (!rows[0]) return undefined;
     const updatedAt = new Date().toISOString();
-    await pool.query(
-      'UPDATE campaigns SET deleted_at = NULL, updated_at = $1 WHERE id = $2',
-      [updatedAt, Number(id)],
-    );
+    await pool.query('UPDATE campaigns SET deleted_at = NULL, updated_at = $1 WHERE id = $2', [
+      updatedAt,
+      Number(id),
+    ]);
     return getById(id);
   }
 

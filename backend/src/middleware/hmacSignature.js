@@ -79,7 +79,9 @@ export function createHmacSignatureMiddleware(opts = {}) {
     }
 
     // Raw body must be available as Buffer on req.rawBody (set by express.raw or body-parser verify)
-    const rawBody = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(JSON.stringify(req.body ?? ''));
+    const rawBody = Buffer.isBuffer(req.rawBody)
+      ? req.rawBody
+      : Buffer.from(JSON.stringify(req.body ?? ''));
 
     const material = `${tsHeader}.${nonceKey}.${rawBody.toString('hex')}`;
     const expected = createHmac('sha256', secret).update(material).digest('hex');

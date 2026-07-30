@@ -27,8 +27,13 @@ import { apiKeyCreateSchema, apiKeyRateTierUpdateSchema, formatZodErrors } from 
  * @returns {import('express').Router}
  */
 export function createAdminKeyRoutes(deps) {
-  const { apiKeyRepository, requireMasterKey, idempotencyMiddleware, rateLimiter, recordAuditEntry } =
-    deps;
+  const {
+    apiKeyRepository,
+    requireMasterKey,
+    idempotencyMiddleware,
+    rateLimiter,
+    recordAuditEntry,
+  } = deps;
 
   const router = Router();
 

@@ -1,13 +1,13 @@
 # RFC-XXXX: Title
 
-| Field      | Value                        |
-|------------|------------------------------|
-| RFC Number | XXXX                         |
-| Author(s)  | @handle                      |
+| Field      | Value                                             |
+| ---------- | ------------------------------------------------- |
+| RFC Number | XXXX                                              |
+| Author(s)  | @handle                                           |
 | Status     | Draft / Review / Accepted / Rejected / Superseded |
-| Created    | YYYY-MM-DD                   |
-| Updated    | YYYY-MM-DD                   |
-| Supersedes | —                            |
+| Created    | YYYY-MM-DD                                        |
+| Updated    | YYYY-MM-DD                                        |
+| Supersedes | —                                                 |
 
 ## Summary
 
@@ -20,8 +20,8 @@ Include data, user feedback, or incident references where applicable.
 
 ## Detailed Design
 
-Describe the change in enough depth that an engineer unfamiliar with the codebase
-could implement it.
+Describe the change in enough depth that an engineer unfamiliar with the codebase could implement
+it.
 
 ### API / Interface Changes
 

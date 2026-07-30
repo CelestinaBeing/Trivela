@@ -1,18 +1,18 @@
 # RFC-0001: HMAC Request Signing for Partner / Admin Routes
 
-| Field      | Value        |
-|------------|--------------|
-| RFC Number | 0001         |
+| Field      | Value          |
+| ---------- | -------------- |
+| RFC Number | 0001           |
 | Author(s)  | @Williams-1604 |
-| Status     | Accepted     |
-| Created    | 2026-07-01   |
-| Updated    | 2026-07-29   |
+| Status     | Accepted       |
+| Created    | 2026-07-01     |
+| Updated    | 2026-07-29     |
 
 ## Summary
 
-Add an optional HMAC-SHA256 request-signing layer for partner-to-server and admin API calls.
-Signed requests include a timestamp and a nonce; the server rejects stale or replayed requests,
-providing a second authentication factor beyond API keys.
+Add an optional HMAC-SHA256 request-signing layer for partner-to-server and admin API calls. Signed
+requests include a timestamp and a nonce; the server rejects stale or replayed requests, providing a
+second authentication factor beyond API keys.
 
 ## Motivation
 
@@ -47,13 +47,13 @@ The HMAC key is `PARTNER_HMAC_SECRET` from the environment (≥ 32 bytes recomme
 ### Replay Protection
 
 - Requests whose timestamp is more than ±5 minutes from server time are rejected with 401.
-- Each nonce is stored in an in-memory `Map` (or Redis for multi-instance) for 10 minutes.
-  A nonce seen twice → 401.
+- Each nonce is stored in an in-memory `Map` (or Redis for multi-instance) for 10 minutes. A nonce
+  seen twice → 401.
 
 ### Middleware
 
-`backend/src/middleware/hmacSignature.js` exports `createHmacSignatureMiddleware(opts)`.
-Apply it to any route group that requires signed requests:
+`backend/src/middleware/hmacSignature.js` exports `createHmacSignatureMiddleware(opts)`. Apply it to
+any route group that requires signed requests:
 
 ```js
 import { createHmacSignatureMiddleware } from './middleware/hmacSignature.js';
@@ -95,8 +95,8 @@ function signRequest(method, body, secret) {
 
 ## Drawbacks
 
-- In-memory nonce store is node-process-local; multi-instance deployments need Redis
-  (documented as a migration path).
+- In-memory nonce store is node-process-local; multi-instance deployments need Redis (documented as
+  a migration path).
 - Signature computation adds ~1 ms per request (negligible).
 
 ## Acceptance Criteria

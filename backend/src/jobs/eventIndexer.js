@@ -45,6 +45,9 @@ class Semaphore {
       this._queue.shift()();
     }
   }
+}
+
+/**
  * Features:
  * - Durable cursor persistence in indexer_state table
  * - Idempotent upserts via UNIQUE(tx_hash, event_index) constraint
@@ -451,10 +454,9 @@ export function createEventIndexer({
    */
   async function pollWithCursor(contractId, { maxInflight = 32 } = {}) {
     // Load the last durable cursor so we resume exactly where we left off.
-    const cursorRow = await db.get(
-      `SELECT cursor FROM indexer_cursors WHERE contract_id = ?`,
-      [contractId],
-    );
+    const cursorRow = await db.get(`SELECT cursor FROM indexer_cursors WHERE contract_id = ?`, [
+      contractId,
+    ]);
     const cursor = cursorRow?.cursor ?? undefined;
 
     const rpc = await rpcPool.acquire();

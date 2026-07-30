@@ -91,7 +91,11 @@ export function createSanctionsService(opts = {}) {
         const logger = context.logger ?? opts.logger;
         if (logger) {
           logger.warn(
-            { address: address.slice(0, 8) + '…', reason: result.reason, provider: result.provider },
+            {
+              address: address.slice(0, 8) + '…',
+              reason: result.reason,
+              provider: result.provider,
+            },
             'sanctions: payout address blocked',
           );
         }

@@ -41,7 +41,12 @@ describe('recordActivity', () => {
   it('returns streakDays=1 and pointsEarned=10 on first activity', () => {
     const svc = makeService('2026-07-01');
     const result = svc.recordActivity('GADDR1');
-    expect(result).toMatchObject({ streakDays: 1, pointsEarned: 10, totalPoints: 10, alreadyCredited: false });
+    expect(result).toMatchObject({
+      streakDays: 1,
+      pointsEarned: 10,
+      totalPoints: 10,
+      alreadyCredited: false,
+    });
   });
 
   it('returns alreadyCredited=true and pointsEarned=0 on same-day duplicate', () => {
@@ -54,18 +59,28 @@ describe('recordActivity', () => {
   it('increments streak on the next day', () => {
     const store = new Map();
     // Day 1
-    createStreakService({ store, today: new Date('2026-07-01T12:00:00Z') }).recordActivity('GADDR1');
+    createStreakService({ store, today: new Date('2026-07-01T12:00:00Z') }).recordActivity(
+      'GADDR1',
+    );
     // Day 2
-    const r2 = createStreakService({ store, today: new Date('2026-07-02T12:00:00Z') }).recordActivity('GADDR1');
+    const r2 = createStreakService({
+      store,
+      today: new Date('2026-07-02T12:00:00Z'),
+    }).recordActivity('GADDR1');
     expect(r2.streakDays).toBe(2);
     expect(r2.pointsEarned).toBe(10);
   });
 
   it('resets streak to 1 after a missed day', () => {
     const store = new Map();
-    createStreakService({ store, today: new Date('2026-07-01T12:00:00Z') }).recordActivity('GADDR1');
+    createStreakService({ store, today: new Date('2026-07-01T12:00:00Z') }).recordActivity(
+      'GADDR1',
+    );
     // Skip July 2nd — activity on July 3rd should reset
-    const r3 = createStreakService({ store, today: new Date('2026-07-03T12:00:00Z') }).recordActivity('GADDR1');
+    const r3 = createStreakService({
+      store,
+      today: new Date('2026-07-03T12:00:00Z'),
+    }).recordActivity('GADDR1');
     expect(r3.streakDays).toBe(1);
     expect(r3.pointsEarned).toBe(10);
   });
@@ -96,7 +111,10 @@ describe('recordActivity', () => {
     const store = new Map();
     createStreakService({ store, today: new Date('2026-07-01T12:00:00Z') }).recordActivity('ACC');
     createStreakService({ store, today: new Date('2026-07-02T12:00:00Z') }).recordActivity('ACC');
-    const r = createStreakService({ store, today: new Date('2026-07-03T12:00:00Z') }).recordActivity('ACC');
+    const r = createStreakService({
+      store,
+      today: new Date('2026-07-03T12:00:00Z'),
+    }).recordActivity('ACC');
     // Day 1: 10, Day 2: 10, Day 3: 15 = 35
     expect(r.totalPoints).toBe(35);
   });

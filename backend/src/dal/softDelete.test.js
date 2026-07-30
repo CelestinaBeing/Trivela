@@ -3,7 +3,11 @@ import test from 'node:test';
 import Database from 'better-sqlite3';
 import { runMigrations } from '../db/migrate.js';
 import { createSqliteCampaignRepository } from './sqliteCampaignRepository.js';
-import { purgePiiForUser, purgePiiForCampaign, exportPiiForUser } from '../services/piiPurgeService.js';
+import {
+  purgePiiForUser,
+  purgePiiForCampaign,
+  exportPiiForUser,
+} from '../services/piiPurgeService.js';
 
 async function setupTestRepository(seed = []) {
   const db = new Database(':memory:');
@@ -38,7 +42,11 @@ test('soft-deleted campaign is hidden from getById() by default', async () => {
 test('soft-deleted campaign is hidden from getBySlug() by default', async () => {
   const { repository } = await setupTestRepository();
 
-  const campaign = repository.create({ name: 'Test Campaign', slug: 'test-campaign', rewardPerAction: 10 });
+  const campaign = repository.create({
+    name: 'Test Campaign',
+    slug: 'test-campaign',
+    rewardPerAction: 10,
+  });
   assert.ok(repository.getBySlug('test-campaign'));
 
   repository.delete(campaign.id);
@@ -303,11 +311,14 @@ test('purgePiiForUser covers notification_preferences and unsubscribe_tokens (#9
   assert.ok(result.purged.some((p) => p.table === 'notification_preferences'));
   assert.ok(result.purged.some((p) => p.table === 'unsubscribe_tokens'));
   assert.equal(
-    db.prepare('SELECT COUNT(*) AS n FROM notification_preferences WHERE user_address = ?').get('user1').n,
+    db
+      .prepare('SELECT COUNT(*) AS n FROM notification_preferences WHERE user_address = ?')
+      .get('user1').n,
     0,
   );
   assert.equal(
-    db.prepare('SELECT COUNT(*) AS n FROM unsubscribe_tokens WHERE user_address = ?').get('user1').n,
+    db.prepare('SELECT COUNT(*) AS n FROM unsubscribe_tokens WHERE user_address = ?').get('user1')
+      .n,
     0,
   );
 });
@@ -354,7 +365,14 @@ test('exportPiiForUser redacts push_subscriptions credential fields', async () =
   const { db } = await setupTestRepository();
   db.prepare(
     'INSERT INTO push_subscriptions (user, endpoint, p256dh, auth, user_agent, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-  ).run('user1', 'https://push.example/abc', 'real-p256dh-key', 'real-auth-secret', 'test-agent', Date.now());
+  ).run(
+    'user1',
+    'https://push.example/abc',
+    'real-p256dh-key',
+    'real-auth-secret',
+    'test-agent',
+    Date.now(),
+  );
 
   const result = exportPiiForUser(db, 'user1');
   assert.equal(result.data.push_subscriptions.length, 1);

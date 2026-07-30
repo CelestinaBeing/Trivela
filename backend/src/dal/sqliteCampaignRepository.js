@@ -178,7 +178,17 @@ export function createSqliteCampaignRepository({
    *   order?: 'asc' | 'desc'
    * }} [opts]
    */
-  function list({ active, q, tags, category, includeHidden = false, includeDeleted = false, status, sort, order } = {}) {
+  function list({
+    active,
+    q,
+    tags,
+    category,
+    includeHidden = false,
+    includeDeleted = false,
+    status,
+    sort,
+    order,
+  } = {}) {
     const where = [];
     const params = [];
     const hasQuery = typeof q === 'string' && q.length > 0;
@@ -419,15 +429,24 @@ export function createSqliteCampaignRepository({
     const campaign = getById(id);
     if (!campaign) return false;
     const deletedAt = new Date().toISOString();
-    const info = db.prepare('UPDATE campaigns SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL').run(deletedAt, deletedAt, Number(id));
+    const info = db
+      .prepare(
+        'UPDATE campaigns SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      )
+      .run(deletedAt, deletedAt, Number(id));
     return info.changes > 0;
   }
 
   function restore(id) {
-    const row = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    const row = db
+      .prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL')
+      .get(Number(id));
     if (!row) return undefined;
     const updatedAt = new Date().toISOString();
-    db.prepare('UPDATE campaigns SET deleted_at = NULL, updated_at = ? WHERE id = ?').run(updatedAt, Number(id));
+    db.prepare('UPDATE campaigns SET deleted_at = NULL, updated_at = ? WHERE id = ?').run(
+      updatedAt,
+      Number(id),
+    );
     return getById(id);
   }
 
@@ -447,7 +466,12 @@ export function createSqliteCampaignRepository({
     if (olderThanDays) {
       where.push(`deleted_at < datetime('now', '-${olderThanDays} days')`);
     }
-    return db.prepare(`SELECT * FROM campaigns WHERE ${where.join(' AND ')} ORDER BY deleted_at ASC LIMIT ?`).all(...params, limit).map(rowToCampaign);
+    return db
+      .prepare(
+        `SELECT * FROM campaigns WHERE ${where.join(' AND ')} ORDER BY deleted_at ASC LIMIT ?`,
+      )
+      .all(...params, limit)
+      .map(rowToCampaign);
   }
 
   function clone(id, overrides = {}) {
@@ -500,7 +524,9 @@ export function createSqliteCampaignRepository({
    * Validates required fields before publishing
    */
   function publish(id) {
-    const deletedCampaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    const deletedCampaign = db
+      .prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL')
+      .get(Number(id));
     if (deletedCampaign) {
       throw new Error('Cannot publish a deleted campaign');
     }
@@ -540,7 +566,9 @@ export function createSqliteCampaignRepository({
    * Can only archive published campaigns
    */
   function archive(id) {
-    const deletedCampaign = db.prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL').get(Number(id));
+    const deletedCampaign = db
+      .prepare('SELECT * FROM campaigns WHERE id = ? AND deleted_at IS NOT NULL')
+      .get(Number(id));
     if (deletedCampaign) {
       throw new Error('Cannot archive a deleted campaign');
     }

@@ -174,9 +174,7 @@ test('rateLimit resolveLimits can override windowMs too, and falls back to defau
     windowMs: 60_000,
     maxRequests: 1,
     resolveLimits: (req) =>
-      req.headers['x-api-key'] === 'enterprise-key'
-        ? { maxRequests: 1000, windowMs: 1_000 }
-        : null,
+      req.headers['x-api-key'] === 'enterprise-key' ? { maxRequests: 1000, windowMs: 1_000 } : null,
   });
 
   const entReq = makeReqRes({ apiKey: 'enterprise-key' });

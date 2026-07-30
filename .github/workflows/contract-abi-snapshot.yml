@@ -8,13 +8,13 @@ name: Contract ABI Snapshot
 on:
   pull_request:
     paths:
-      - "contracts/**"
-      - ".github/workflows/contract-abi-snapshot.yml"
+      - 'contracts/**'
+      - '.github/workflows/contract-abi-snapshot.yml'
   push:
     branches:
       - main
     paths:
-      - "contracts/**"
+      - 'contracts/**'
 
 jobs:
   abi-snapshot:
