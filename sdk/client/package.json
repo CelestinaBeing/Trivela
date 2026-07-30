@@ -5,7 +5,8 @@
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./zk": "./zk/index.ts"
   },
   "scripts": {
     "generate": "openapi-ts --input ../../backend/openapi.yaml --output src --plugins @hey-api/typescript",
