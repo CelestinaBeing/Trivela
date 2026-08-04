@@ -45,7 +45,8 @@ const server = http.createServer(async (req, res) => {
       try {
         // Timing-safely verify signature using webhook-verify SDK
         const event = constructEvent(rawPayload, signature, WEBHOOK_SECRET);
-        console.log(`[Webhook Verified]: Received event type: ${event.type}`);
+        const sanitizedEventType = event.type.replace(/[\r\n\t]/g, '_');
+        console.log(`[Webhook Verified]: Received event type: ${sanitizedEventType}`);
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ verified: true, eventType: event.type }));
