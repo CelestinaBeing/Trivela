@@ -94,10 +94,7 @@ pub enum Error {
     NonceReused = 120,
     DuplicateSigner = 121,
     UnknownSigner = 122,
-    /// Referral would create a direct cycle (A→B where B already refers A).
-    ReferralLoop = 123,
-    /// A referral chain forms a cycle (A→B→…→A), which would enable infinite
-    /// recursive reward amplification. Walk bounded to 10 hops.
+    /// Referral would create a direct cycle or chain cycle (A→B where B already refers A).
     ReferralLoop = 123,
     /// Participant already has a locked referral record from a prior registration
     /// and cannot adopt a different referrer on re-registration (sybil guard).
@@ -1540,25 +1537,10 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
         return Ok(false);
     }
 
-    // On-chain referral validation (issue #455 / #743).
-    if let Some(ref referrer) = referrer {
-        if referrer == &participant {
     // On-chain referral validation (issues #455, #743).
     if let Some(ref referrer) = referrer {
-        if *referrer == participant {
+        if referrer == &participant {
             return Err(Error::SelfReferral);
-        }
-
-        // #743: Direct-loop guard — reject A→B when B's lock already points
-        // back to A (i.e. B was referred by A). Without this, A can register,
-        // refer B, then deregister so B can "refer A back" and both farm each
-        // other's count indefinitely.
-        let referrer_locked_referrer: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&(REFERRAL_LOCK, referrer.clone()));
-        if referrer_locked_referrer.as_ref() == Some(&participant) {
-            return Err(Error::ReferralLoop);
         }
 
         let referrer_registered: bool = env
@@ -1570,30 +1552,6 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
             return Err(Error::ReferrerNotRegistered);
         }
 
-        // #743: Sybil-guard — if this participant already has a locked
-        // referrer from a previous registration cycle, silently discard the
-        // caller-supplied referrer so de/re-register cannot change attribution
-        // or inflate the locked referrer's count.
-        let already_locked: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&(REFERRAL_LOCK, participant.clone()));
-        if already_locked.is_some() {
-            // Participant has cycled through before; ignore the new referrer.
-            // Fall through without modifying `referrer` so the block below
-            // sees `None` for the re-register path.
-            // We overwrite the outer binding to disable referral attribution.
-        } else {
-            // First-time registration with a referrer — lock it in immediately
-            // (before the PARTICIPANT key, so a concurrent call cannot race).
-            env.storage()
-                .persistent()
-                .set(&(REFERRAL_LOCK, participant.clone()), referrer);
-            env.storage().persistent().extend_ttl(
-                &(REFERRAL_LOCK, participant.clone()),
-                PARTICIPANT_TTL_THRESHOLD,
-                PARTICIPANT_TTL_EXTEND_TO,
-            );
         // Sybil guard (#743): if participant was ever registered before,
         // their referral record is locked and cannot be changed.
         let lock_key = (REFERRAL_LOCKED, participant.clone());
@@ -1690,6 +1648,16 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
         );
 
         if !already_attributed {
+            // Stamp the referral-lock so this participant cannot adopt a different
+            // referrer if they deregister and re-register (#743 sybil guard).
+            let lock_key = (REFERRAL_LOCKED, participant.clone());
+            env.storage().persistent().set(&lock_key, &true);
+            env.storage().persistent().extend_ttl(
+                &lock_key,
+                PARTICIPANT_TTL_THRESHOLD,
+                PARTICIPANT_TTL_EXTEND_TO,
+            );
+
             let count_key = (REFERRAL_COUNT, referrer.clone());
             let referral_total: u64 = env.storage().persistent().get(&count_key).unwrap_or(0);
             env.storage()
@@ -1700,26 +1668,6 @@ fn do_register(env: &Env, participant: Address, referrer: Option<Address>) -> Re
                 PARTICIPANT_TTL_THRESHOLD,
                 PARTICIPANT_TTL_EXTEND_TO,
             );
-        // Stamp the referral-lock so this participant cannot adopt a different
-        // referrer if they deregister and re-register (#743 sybil guard).
-        let lock_key = (REFERRAL_LOCKED, participant.clone());
-        env.storage().persistent().set(&lock_key, &true);
-        env.storage().persistent().extend_ttl(
-            &lock_key,
-            PARTICIPANT_TTL_THRESHOLD,
-            PARTICIPANT_TTL_EXTEND_TO,
-        );
-
-        let count_key = (REFERRAL_COUNT, referrer.clone());
-        let referral_total: u64 = env.storage().persistent().get(&count_key).unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&count_key, &(referral_total + 1));
-        env.storage().persistent().extend_ttl(
-            &count_key,
-            PARTICIPANT_TTL_THRESHOLD,
-            PARTICIPANT_TTL_EXTEND_TO,
-        );
 
             env.events()
                 .publish((REFERRED_EVENT, participant, referrer), ());
