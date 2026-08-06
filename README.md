@@ -79,6 +79,7 @@ VITE_CAMPAIGN_CONTRACT_ID=CDDVJVHP6PUYWB42VQJ6YC7GEUQR622JEE5MY65ZIKUETGDT33QZPB
 | **Campaign Contract** | Stores campaign active flag and participant registration                   |
 | **Backend API**       | REST API for campaign metadata, health checks, and integration             |
 | **Frontend**          | React app to list campaigns and connect wallets to interact with contracts |
+| **Embed widgets**     | Sandboxed iframe and script-tag embeds for partners to show campaigns on third-party sites |
 
 ### Use Cases
 
