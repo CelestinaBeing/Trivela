@@ -20,3 +20,4 @@ export {
 export { Tooltip, Popover, PLACEMENTS } from './Tooltip.jsx';
 export { default as Modal, ConfirmDialog } from './Modal.jsx';
 export { default as FormField, FormFieldGroup, useFormValidation } from './FormField.jsx';
+export { Skeleton } from './Skeleton.jsx';
