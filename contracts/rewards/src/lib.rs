@@ -44,7 +44,9 @@ use soroban_sdk::{
     Bytes, BytesN, Env, Symbol, Vec,
 };
 
+#[cfg(test)]
 mod poseidon;
+#[cfg(test)]
 mod merkle;
 #[cfg(test)]
 mod poseidon_merkle_tests;
@@ -82,30 +84,7 @@ pub enum Error {
     InvalidReferralConfig = 19,
     /// The computed referral bonus rounded down to zero.
     ZeroReferralBonus = 20,
-    // ── Multi-sig errors (issue #733) ─────────────────────────────────────────
-    /// Multi-sig configuration has not been initialised.
-    MultiSigNotConfigured = 21,
-    /// Threshold must be >= 1 and <= len(signers).
-    InvalidThreshold = 22,
-    /// The caller is not in the authorised signer set.
-    NotASigner = 23,
-    /// This signer has already approved this proposal.
-    AlreadyApproved = 24,
-    /// The referenced proposal does not exist.
-    ProposalNotFound = 25,
-    /// The proposal has passed its expiry ledger.
-    ProposalExpired = 26,
-    /// The proposal does not yet have enough approvals to execute.
-    InsufficientApprovals = 27,
-    // ── Governance errors (issue #735) ────────────────────────────────────────
-    /// Governance quorum or delay has not been configured.
-    GovernanceNotConfigured = 28,
-    /// A governance proposal for this key is already pending.
-    ProposalAlreadyPending = 29,
-    /// The time-lock delay has not yet elapsed.
-    TimeLockActive = 30,
-    /// The governance proposal has been cancelled or never existed.
-    ProposalCancelled = 31,
+    // ── SEP-41 Token errors (issue #530) ──────────────────────────────────────
     /// SEP-41 token mode is not enabled.
     TokenModeNotEnabled = 21,
     /// SEP-41: allowance not sufficient for transfer_from.
@@ -120,10 +99,6 @@ pub enum Error {
     DuplicateSigner = 28,
     UnknownSigner = 29,
     /// Operation amount must be greater than zero (issue #1020).
-    ///
-    /// Assigned 30/31 rather than 21/22: the SEP-41 block already published
-    /// those codes through the generated bindings and docs/CONTRACTS_API.md,
-    /// so renumbering it would break decoding for existing clients.
     ZeroAmount = 30,
     /// Transfer source and destination cannot be the same address (issue #1020).
     SelfTransfer = 31,
@@ -135,6 +110,28 @@ pub enum Error {
     ClawbackOverspend = 34,
     /// Only the configured guardian (admin) may cancel a clawback proposal.
     ClawbackGuardianOnly = 35,
+    // ── Multi-sig errors (issue #733) ─────────────────────────────────────────
+    /// Multi-sig configuration has not been initialised.
+    MultiSigNotConfigured = 36,
+    /// The caller is not in the authorised signer set.
+    NotASigner = 37,
+    /// This signer has already approved this proposal.
+    AlreadyApproved = 38,
+    /// The referenced proposal does not exist.
+    ProposalNotFound = 39,
+    /// The proposal has passed its expiry ledger.
+    ProposalExpired = 40,
+    /// The proposal does not yet have enough approvals to execute.
+    InsufficientApprovals = 41,
+    // ── Governance errors (issue #735) ────────────────────────────────────────
+    /// Governance quorum or delay has not been configured.
+    GovernanceNotConfigured = 42,
+    /// A governance proposal for this key is already pending.
+    ProposalAlreadyPending = 43,
+    /// The time-lock delay has not yet elapsed.
+    TimeLockActive = 44,
+    /// The governance proposal has been cancelled or never existed.
+    ProposalCancelled = 45,
 }
 
 /// Vesting schedule record stored per user per vest_id.
@@ -1696,6 +1693,9 @@ impl RewardsContract {
         env.storage()
             .instance()
             .set(&MULTISIG_CFG, &cfg);
+        Ok(())
+    }
+
     // ── SEP-41 Token Interface (issue #530) ──────────────────────────────────
 
     /// Enable token mode (admin only). One-way: once enabled, cannot be disabled.
@@ -2042,6 +2042,9 @@ impl RewardsContract {
             .remove(&(GOV_PROP, proposal_id));
         env.events()
             .publish((GOV_CANCEL_EVENT, admin), proposal_id);
+        Ok(())
+    }
+
     /// Check if token mode is enabled.
     pub fn is_token_mode(env: Env) -> bool {
         env.storage().instance().get(&TOKEN_MODE).unwrap_or(false)
@@ -2468,6 +2471,8 @@ impl RewardsContract {
     /// Return the current state of a governance proposal.
     pub fn get_param_proposal(env: Env, proposal_id: u64) -> Option<ParamProposal> {
         env.storage().instance().get(&(GOV_PROP, proposal_id))
+    }
+
     /// Returns the configured M-of-N multisig threshold (0 = disabled).
     pub fn multisig_threshold(env: Env) -> u32 {
         env.storage()
