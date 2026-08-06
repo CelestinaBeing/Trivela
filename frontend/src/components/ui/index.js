@@ -18,4 +18,5 @@ export {
   DEFAULT_PAGE_SIZE_OPTIONS,
 } from './Pagination.jsx';
 export { Tooltip, Popover, PLACEMENTS } from './Tooltip.jsx';
+export { default as DataTable, nextSort } from './DataTable.jsx';
 export { Skeleton } from './Skeleton.jsx';
