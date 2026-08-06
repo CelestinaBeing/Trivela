@@ -19,3 +19,5 @@ export {
 } from './Pagination.jsx';
 export { Tooltip, Popover, PLACEMENTS } from './Tooltip.jsx';
 export { Toast } from './Toast.jsx';
+export { default as DataTable, nextSort } from './DataTable.jsx';
+export { Skeleton } from './Skeleton.jsx';
