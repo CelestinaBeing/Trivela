@@ -55,7 +55,7 @@ export const Sortable = {
 };
 
 export const WithPagination = {
-  render: (args) => {
+  Render: (args) => {
     const [page, setPage] = useState(1);
     const [sortKey, setSortKey] = useState('points');
     const [sortDir, setSortDir] = useState('desc');
